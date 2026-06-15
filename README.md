@@ -1,5 +1,7 @@
 # openarchiver-mcp
 
+[![CI](https://github.com/arnd/openarchiver-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/arnd/openarchiver-mcp/actions/workflows/ci.yml)
+
 An [MCP](https://modelcontextprotocol.io) server that lets an AI assistant (Claude Code, Claude
 Desktop, …) search and read your [OpenArchiver](https://openarchiver.com) email archive.
 
@@ -18,6 +20,10 @@ All operations are **read-only**.
 - **Node.js ≥ 26**
 - An OpenArchiver instance and an **API key** with the permissions `search:archive` and `read:archive`
   (create one in OpenArchiver under *Settings → API keys*, or via `POST /api/v1/api-keys`).
+
+> **OpenArchiver compatibility:** developed and tested against **OpenArchiver 0.5.0** (REST API `v1`).
+> OpenArchiver has no stable public OpenAPI spec yet, so other versions may differ; 0.5.0 or newer is
+> recommended.
 
 ## Install & build
 
