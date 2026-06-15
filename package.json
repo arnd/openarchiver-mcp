@@ -1,15 +1,34 @@
 {
   "name": "openarchiver-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "MCP server for searching an OpenArchiver email archive (search, read emails, fetch attachments).",
   "license": "MIT",
   "author": "Arnd Hannemann",
   "type": "module",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "openarchiver",
+    "email",
+    "archive",
+    "search",
+    "claude"
+  ],
+  "homepage": "https://github.com/arnd/openarchiver-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arnd/openarchiver-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arnd/openarchiver-mcp/issues"
+  },
   "bin": {
     "openarchiver-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/*.test.js",
+    "!dist/*.test.js.map"
   ],
   "engines": {
     "node": ">=26"
@@ -19,7 +38,8 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "test": "npm run build && node --test \"dist/*.test.js\"",
-    "smoke": "npm run build && node scripts/smoke.mjs"
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

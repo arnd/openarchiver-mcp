@@ -25,7 +25,17 @@ All operations are **read-only**.
 > OpenArchiver has no stable public OpenAPI spec yet, so other versions may differ; 0.5.0 or newer is
 > recommended.
 
-## Install & build
+## Install
+
+The published package runs directly with `npx` — no checkout or build needed:
+
+```bash
+npx -y openarchiver-mcp
+```
+
+(It's normally launched by your MCP client, not by hand — see below.)
+
+### From source
 
 ```bash
 npm install
@@ -63,7 +73,7 @@ node --env-file=.env dist/index.js
 claude mcp add openarchiver \
   --env OPENARCHIVER_BASE_URL=https://openarchiver.example.com \
   --env OPENARCHIVER_API_KEY=your-api-key \
-  -- node /absolute/path/to/openarchiver-mcp/dist/index.js
+  -- npx -y openarchiver-mcp
 ```
 
 ## Use with Claude Desktop
@@ -74,8 +84,8 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "openarchiver": {
-      "command": "node",
-      "args": ["/absolute/path/to/openarchiver-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "openarchiver-mcp"],
       "env": {
         "OPENARCHIVER_BASE_URL": "https://openarchiver.example.com",
         "OPENARCHIVER_API_KEY": "your-api-key"
@@ -84,6 +94,9 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+> Running from a local checkout instead? Replace the command with
+> `node /absolute/path/to/openarchiver-mcp/dist/index.js`.
 
 ## Inspect / debug
 
