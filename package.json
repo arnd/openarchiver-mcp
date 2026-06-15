@@ -2,6 +2,8 @@
   "name": "openarchiver-mcp",
   "version": "0.1.0",
   "description": "MCP server for searching an OpenArchiver email archive (search, read emails, fetch attachments).",
+  "license": "MIT",
+  "author": "Arnd Hannemann",
   "type": "module",
   "bin": {
     "openarchiver-mcp": "dist/index.js"
