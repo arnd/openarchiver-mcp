@@ -31,7 +31,11 @@ All operations are **read-only**.
 npm install
 npm run build      # compiles TypeScript to dist/
 npm test           # builds and runs the unit tests
+npm run smoke      # launches the built server and verifies it speaks MCP (tools/list)
 ```
+
+> `npm run smoke` needs no OpenArchiver instance: it uses dummy credentials and only lists tools,
+> which never calls the API.
 
 ## Configuration
 

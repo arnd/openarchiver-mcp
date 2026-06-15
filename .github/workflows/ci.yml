@@ -17,3 +17,5 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm test
+      - name: MCP smoke test (tools/list over stdio)
+        run: node scripts/smoke.mjs
