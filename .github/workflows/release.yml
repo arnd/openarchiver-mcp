@@ -1,0 +1,28 @@
+name: Release
+
+# Publishes to npm when a version tag (vX.Y.Z) is pushed.
+# Uses npm Trusted Publishing (OIDC) — no NPM_TOKEN secret is stored; npm
+# verifies the GitHub Actions identity and attaches a provenance attestation.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for OIDC trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+      - run: npm install -g npm@latest # ensure a version with trusted publishing
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/smoke.mjs
+      - run: npm publish --provenance --access public
