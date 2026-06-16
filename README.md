@@ -11,7 +11,7 @@ It is a thin, typed wrapper around the OpenArchiver REST API and exposes three t
 |------|--------------|
 | `search_archive` | Full-text search across archived emails (subject, body, **and extracted attachment text**). Returns compact hits, each with an `id`. |
 | `get_email` | Fetch one email by id: metadata, full body, and an attachment list (each with a `storagePath`). |
-| `get_attachment` | Download an attachment by its `storagePath`. Text → text, images → image content, other binaries → base64. |
+| `get_attachment` | Download an attachment by its `storagePath`. Default returns it inline (text → text, images → image content, other binaries → base64). With `mode: "file"` it saves the bytes to a server-managed temp file and returns only the path — handy for large binaries to keep base64 out of the context (path only usable when the server runs locally; the server picks the path, callers can't). |
 
 All operations are **read-only**.
 

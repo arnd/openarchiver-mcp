@@ -6,9 +6,26 @@ import {
   formatBytes,
   formatEmail,
   formatSearchResults,
+  safeAttachmentFilename,
   snippet,
   stripHtml,
 } from "./format.js";
+
+describe("safeAttachmentFilename", () => {
+  it("keeps a normal filename", () => {
+    assert.equal(safeAttachmentFilename("invoice 2026.pdf"), "invoice_2026.pdf");
+  });
+  it("strips directory components and traversal", () => {
+    assert.equal(safeAttachmentFilename("../../etc/passwd"), "passwd");
+    assert.equal(safeAttachmentFilename("a/b/c\\d.txt"), "d.txt");
+    assert.equal(safeAttachmentFilename(".."), "attachment");
+  });
+  it("drops leading dots and falls back for empty/missing", () => {
+    assert.equal(safeAttachmentFilename(".env"), "env");
+    assert.equal(safeAttachmentFilename(""), "attachment");
+    assert.equal(safeAttachmentFilename(undefined), "attachment");
+  });
+});
 
 describe("snippet", () => {
   it("collapses whitespace and truncates", () => {

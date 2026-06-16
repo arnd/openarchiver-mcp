@@ -1,11 +1,21 @@
 #!/usr/bin/env node
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { simpleParser } from "mailparser";
 import { z } from "zod";
 import { OpenArchiverClient, OpenArchiverError } from "./client.js";
 import { loadConfig } from "./config.js";
-import { classifyAttachment, formatEmail, formatSearchResults, stripHtml } from "./format.js";
+import {
+  classifyAttachment,
+  formatEmail,
+  formatSearchResults,
+  safeAttachmentFilename,
+  stripHtml,
+} from "./format.js";
 
 const DEFAULT_MAX_ATTACHMENT_BYTES = 5_000_000;
 
@@ -98,26 +108,48 @@ async function main(): Promise<void> {
     {
       title: "Download an attachment",
       description:
-        "Download an attachment by its `storagePath` (from get_email). Text files are returned as text, " +
-        "images as image content, other binaries (PDF, Office, …) as base64. " +
+        "Download an attachment by its `storagePath` (from get_email). " +
+        "mode 'inline' (default): text files are returned as text, images as image content, " +
+        "other binaries (PDF, Office, …) as base64. " +
+        "mode 'file': write the bytes to a server-managed temp file and return only its path — " +
+        "use this for large binaries to avoid huge base64 in the context. The returned path is only " +
+        "usable when this server runs on the same machine as the client (local stdio); the server " +
+        "chooses the path itself, so callers cannot point it at arbitrary files. " +
         "Tip: for PDFs, the extracted text is also searchable and shown via search_archive/get_email.",
       inputSchema: {
         path: z
           .string()
           .min(1)
           .describe("The attachment's storagePath, e.g. 'open-archiver/.../attachments/xyz.pdf'."),
+        mode: z
+          .enum(["inline", "file"])
+          .optional()
+          .describe("'inline' (default) returns content in the response; 'file' saves to a temp file and returns its path."),
         maxBytes: z
           .number()
           .int()
           .min(1)
           .optional()
-          .describe(`Max bytes to return inline (default ${DEFAULT_MAX_ATTACHMENT_BYTES}).`),
+          .describe(`Max bytes to return inline (default ${DEFAULT_MAX_ATTACHMENT_BYTES}); ignored for mode 'file'.`),
       },
     },
-    async ({ path, maxBytes }) => {
+    async ({ path, mode, maxBytes }) => {
       try {
-        const max = maxBytes ?? DEFAULT_MAX_ATTACHMENT_BYTES;
         const { bytes, contentType, filename } = await client.download(path);
+
+        if (mode === "file") {
+          const dir = join(tmpdir(), "openarchiver-mcp");
+          await mkdir(dir, { recursive: true });
+          // Server-generated path inside our own dir: a random prefix guarantees
+          // uniqueness, and the sanitized basename can't escape `dir`.
+          const target = join(dir, `${randomUUID()}-${safeAttachmentFilename(filename)}`);
+          await writeFile(target, bytes, { flag: "wx" });
+          return text(
+            `Saved "${filename || "attachment"}" (${contentType}, ${bytes.length} bytes) to:\n${target}`,
+          );
+        }
+
+        const max = maxBytes ?? DEFAULT_MAX_ATTACHMENT_BYTES;
         const kind = classifyAttachment(contentType, bytes.length, max);
 
         switch (kind) {

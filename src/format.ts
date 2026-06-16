@@ -121,6 +121,20 @@ function isTextual(mimeType: string): boolean {
   );
 }
 
+/**
+ * Reduce an attachment filename to a safe basename: drop any directory
+ * components and characters that could enable path traversal, so the server can
+ * never be tricked into writing outside its own managed temp directory.
+ */
+export function safeAttachmentFilename(name: string | undefined): string {
+  const base = (name ?? "").split(/[/\\]/).pop() ?? "";
+  const cleaned = base
+    .replace(/[^A-Za-z0-9._-]/g, "_") // conservative charset
+    .replace(/^[.]+/, "") // no leading dots (".." / hidden files)
+    .slice(0, 200);
+  return cleaned || "attachment";
+}
+
 /** Minimal HTML-to-text fallback for emails that only have an HTML part. */
 export function stripHtml(html: string): string {
   return html
