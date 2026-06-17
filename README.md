@@ -76,6 +76,17 @@ claude mcp add openarchiver \
   -- npx -y openarchiver-mcp
 ```
 
+## Use with Kiro CLI
+
+```bash
+kiro-cli mcp add \
+  --name openarchiver \
+  --command npx \
+  --args "-y openarchiver-mcp" \
+  --env OPENARCHIVER_BASE_URL=https://openarchiver.example.com \
+  --env OPENARCHIVER_API_KEY=your-api-key
+```
+
 ## Use with Claude Desktop
 
 Add to `claude_desktop_config.json`:
