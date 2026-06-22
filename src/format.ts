@@ -138,15 +138,15 @@ export function safeAttachmentFilename(name: string | undefined): string {
 /** Minimal HTML-to-text fallback for emails that only have an HTML part. */
 export function stripHtml(html: string): string {
   return html
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
     .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&") // unescape ampersand last to avoid double-unescaping
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
