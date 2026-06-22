@@ -138,8 +138,8 @@ export function safeAttachmentFilename(name: string | undefined): string {
 /** Minimal HTML-to-text fallback for emails that only have an HTML part. */
 export function stripHtml(html: string): string {
   return html
-    .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style[^>]*>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script[^>]*>/gi, " ")
     .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")

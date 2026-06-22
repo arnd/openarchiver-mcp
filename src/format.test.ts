@@ -141,4 +141,17 @@ describe("stripHtml", () => {
     assert.doesNotMatch(out, /bad\(\)/);
     assert.doesNotMatch(out, /</);
   });
+
+  it("strips script/style with malformed end tags browsers still accept", () => {
+    for (const html of [
+      "<script>bad()</script >",
+      "<script>bad()</script\t\nfoo>",
+      '<script>bad()</script foo="bar">',
+      "<style>x{}</style bar>",
+    ]) {
+      const out = stripHtml(html);
+      assert.doesNotMatch(out, /bad\(\)/, html);
+      assert.doesNotMatch(out, /x\{\}/, html);
+    }
+  });
 });
