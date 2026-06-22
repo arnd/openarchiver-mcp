@@ -43,10 +43,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "html-to-text": "^10.0.0",
     "mailparser": "^3.7.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/html-to-text": "^9.0.4",
     "@types/mailparser": "^3.4.4",
     "@types/node": "^25.9.3",
     "typescript": "^6.0.3"

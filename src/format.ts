@@ -1,3 +1,5 @@
+import { convert as htmlToText } from "html-to-text";
+
 import type { EmailDetail, SearchResponse } from "./client.js";
 
 /** Format an epoch-millis number or ISO string as an ISO timestamp; fall back to the raw value. */
@@ -135,19 +137,19 @@ export function safeAttachmentFilename(name: string | undefined): string {
   return cleaned || "attachment";
 }
 
-/** Minimal HTML-to-text fallback for emails that only have an HTML part. */
+/**
+ * HTML-to-text fallback for emails that only have an HTML part. Delegates to the
+ * well-tested `html-to-text` parser (already in our tree via mailparser) rather
+ * than hand-rolled regexes, which can't safely handle HTML's many corner cases.
+ */
 export function stripHtml(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style[^>]*>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script[^>]*>/gi, " ")
-    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&") // unescape ampersand last to avoid double-unescaping
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
+  return htmlToText(html, {
+    wordwrap: false,
+    selectors: [
+      { selector: "img", format: "skip" },
+      { selector: "a", options: { ignoreHref: true } },
+    ],
+  })
+    .replace(/ /g, " ") // normalize &nbsp; to a plain space
     .trim();
 }
