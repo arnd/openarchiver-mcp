@@ -2,21 +2,25 @@ name: Integration
 
 # End-to-end test: spins up a throwaway OpenArchiver stack with docker compose,
 # imports an mbox, and drives the built MCP server against the live REST API.
-# Heavier than the unit CI (pulls ~5 images), so it runs nightly / on demand and
-# only on PRs that touch the wrapper, the test harness or this workflow.
+# Runs as a separate workflow (concurrently with the unit CI) on pushes/PRs that
+# touch the wrapper, the test harness or this workflow, plus nightly / on demand.
+# A run takes ~1 min in CI, so the path filter mainly skips docs/dependabot churn.
 on:
   workflow_dispatch:
   schedule:
     - cron: '17 3 * * *' # nightly at 03:17 UTC
-  pull_request:
+  push:
     branches: [main]
-    paths:
+    paths: &paths
       - 'src/**'
       - 'test/integration/**'
       - 'scripts/integration.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/integration.yml'
+  pull_request:
+    branches: [main]
+    paths: *paths
 
 permissions:
   contents: read
