@@ -39,13 +39,43 @@ npx -y openarchiver-mcp
 
 ```bash
 npm install
-npm run build      # compiles TypeScript to dist/
-npm test           # builds and runs the unit tests
-npm run smoke      # launches the built server and verifies it speaks MCP (tools/list)
+npm run build             # compiles TypeScript to dist/
+npm test                  # builds and runs the unit tests
+npm run smoke             # launches the built server and verifies it speaks MCP (tools/list)
+npm run test:integration  # full end-to-end test against a real OpenArchiver (needs Docker)
 ```
 
 > `npm run smoke` needs no OpenArchiver instance: it uses dummy credentials and only lists tools,
 > which never calls the API.
+
+### Integration test
+
+`npm run test:integration` (`scripts/integration.mjs`) is a full end-to-end check. It spins up a
+**throwaway OpenArchiver stack** via `docker compose` (`test/integration/`), auto-creates an admin and
+API key, imports a small fixture mbox through the local-file (mbox) connector, then drives the built
+MCP server over stdio against that live instance and asserts `search_archive`, `get_email` and
+`get_attachment` all work. The stack is torn down (`docker compose down -v`) afterwards, so no state
+persists and no real secrets are involved.
+
+> Requires **Docker** and **`docker compose` v2**. It pulls the OpenArchiver stack images
+> and waits for the asynchronous import/indexing, so a run takes a few minutes. It is not part of
+> the fast unit CI — it runs nightly / on demand via the `Integration` workflow.
+
+By default it tests against OpenArchiver **v0.5.0**. To test another version, set `OA_IMAGE_TAG`
+(or pass it as an argument):
+
+```bash
+OA_IMAGE_TAG=v0.4.2 npm run test:integration
+npm run test:integration -- v0.4.2          # equivalent
+
+# test several versions in sequence:
+for v in v0.5.0 v0.4.2; do OA_IMAGE_TAG=$v npm run test:integration || break; done
+```
+
+> Only OSS semver tags (`v0.1.1` … `v0.5.0`) are freely pullable. The `v1.x` releases are published
+> only as `-enterprise` images (e.g. `OA_IMAGE_TAG=v1.4.2-enterprise`), which require a license and
+> may bootstrap differently. The CI `Integration` workflow runs a matrix over `v0.5.0` and `v0.4.2`.
+> Each run uses host port 3000, so local runs must be sequential (the loop above), not parallel.
 
 ## Configuration
 

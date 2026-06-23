@@ -39,6 +39,7 @@
     "dev": "tsc --watch",
     "test": "npm run build && node --test \"dist/*.test.js\"",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "test:integration": "npm run build && node scripts/integration.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

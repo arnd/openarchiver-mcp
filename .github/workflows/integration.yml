@@ -1,0 +1,44 @@
+name: Integration
+
+# End-to-end test: spins up a throwaway OpenArchiver stack with docker compose,
+# imports an mbox, and drives the built MCP server against the live REST API.
+# Heavier than the unit CI (pulls ~5 images), so it runs nightly / on demand and
+# only on PRs that touch the wrapper, the test harness or this workflow.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *' # nightly at 03:17 UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'test/integration/**'
+      - 'scripts/integration.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # OpenArchiver versions to test the MCP against. Only OSS semver tags
+        # (v0.1.1 … v0.5.0) are freely pullable; v1.x are `-enterprise` only.
+        oa_version: ['v0.5.0', 'v0.4.2']
+    name: integration (OpenArchiver ${{ matrix.oa_version }})
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26'
+          cache: 'npm'
+      - run: npm ci
+      - name: Integration test (MCP vs. OpenArchiver via docker compose)
+        run: npm run test:integration
+        env:
+          OA_IMAGE_TAG: ${{ matrix.oa_version }}

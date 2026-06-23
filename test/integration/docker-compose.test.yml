@@ -1,0 +1,55 @@
+# Throwaway OpenArchiver stack for the MCP integration test.
+# Mirrors the upstream OpenArchiver docker-compose (v0.5.0) but minimised for CI:
+# only port 3000 is exposed (the frontend proxies /api/v1 -> backend /v1), the mbox
+# fixture is bind-mounted read-only at /fixtures, and all state lives in named volumes
+# that the orchestrator drops with `down -v` so every run starts from zero users
+# (which lets ADMIN_EMAIL/ADMIN_PASSWORD auto-create the admin via GET /api/v1/auth/status).
+#
+# Image tags are pinned to the versions this MCP is developed against (OpenArchiver 0.5.0).
+
+services:
+    open-archiver:
+        # Tag is set by scripts/integration.mjs via the OA_IMAGE_TAG env var (default v0.5.0).
+        image: logiclabshq/open-archiver:${OA_IMAGE_TAG:-v0.5.0}
+        restart: "no"
+        ports:
+            - '3000:3000'
+        env_file:
+            - test.env
+        volumes:
+            - oa-data:/var/data/open-archiver
+            - ./fixtures:/fixtures:ro
+        depends_on:
+            - postgres
+            - valkey
+            - meilisearch
+            - tika
+
+    postgres:
+        image: postgres:17-alpine
+        restart: "no"
+        environment:
+            POSTGRES_DB: open_archive
+            POSTGRES_USER: admin
+            POSTGRES_PASSWORD: password
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+
+    valkey:
+        image: valkey/valkey:8-alpine
+        restart: "no"
+        command: valkey-server --requirepass defaultredispassword
+
+    meilisearch:
+        image: getmeili/meilisearch:v1.38
+        restart: "no"
+        environment:
+            MEILI_MASTER_KEY: aSampleMasterKey
+
+    tika:
+        image: apache/tika:3.2.2.0-full
+        restart: "no"
+
+volumes:
+    pgdata:
+    oa-data:

@@ -1,0 +1,42 @@
+From alice@example.com Mon Jun 01 09:00:00 2026
+Date: Mon, 01 Jun 2026 09:00:00 +0000
+From: Alice Example <alice@example.com>
+To: Bob Example <bob@example.com>
+Subject: MCPINTEGRATIONNEEDLE first archived message
+Message-ID: <needle-0001@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Hello Bob,
+
+This is the first archived message for the openarchiver-mcp integration test.
+The unique token MCPINTEGRATIONNEEDLE makes this email findable via search_archive.
+
+Regards,
+Alice
+
+From alice@example.com Mon Jun 01 10:30:00 2026
+Date: Mon, 01 Jun 2026 10:30:00 +0000
+From: Alice Example <alice@example.com>
+To: Bob Example <bob@example.com>
+Subject: MCPINTEGRATIONNEEDLE message with attachment
+Message-ID: <needle-0002@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="oa-integration-boundary"
+
+--oa-integration-boundary
+Content-Type: text/plain; charset=utf-8
+
+Hi Bob,
+
+This second MCPINTEGRATIONNEEDLE message carries a plain-text attachment
+named note.txt so the integration test can exercise get_attachment.
+
+Alice
+
+--oa-integration-boundary
+Content-Type: text/plain; charset=utf-8; name="note.txt"
+Content-Disposition: attachment; filename="note.txt"
+
+ATTACHMENT-NEEDLE-CONTENT: this text lives inside note.txt.
+
+--oa-integration-boundary--
