@@ -1,6 +1,6 @@
 {
   "name": "openarchiver-mcp",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "MCP server for searching an OpenArchiver email archive (search, read emails, fetch attachments).",
   "license": "MIT",
   "author": "Arnd Hannemann",
