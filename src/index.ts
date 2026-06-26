@@ -39,8 +39,19 @@ function text(value: string): ToolResult {
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  const client = new OpenArchiverClient(config.apiBase, config.apiKey, fetch, config.timeoutMs);
+  // Build the client lazily so the server can start and answer tools/list even
+  // when OPENARCHIVER_BASE_URL/OPENARCHIVER_API_KEY are not set — e.g. when an MCP
+  // directory or client validates the package by listing its tools. Config is
+  // validated on the first actual tool call (a missing var then surfaces as a
+  // normal tool error instead of crashing the server before the MCP handshake).
+  let client: OpenArchiverClient | undefined;
+  const getClient = (): OpenArchiverClient => {
+    if (!client) {
+      const config = loadConfig();
+      client = new OpenArchiverClient(config.apiBase, config.apiKey, fetch, config.timeoutMs);
+    }
+    return client;
+  };
 
   const server = new McpServer({ name: "openarchiver-mcp", version: "0.1.0" });
 
@@ -65,7 +76,7 @@ async function main(): Promise<void> {
     },
     async (args) => {
       try {
-        const data = await client.search(args);
+        const data = await getClient().search(args);
         return text(formatSearchResults(data));
       } catch (err) {
         return errorResult(err);
@@ -86,7 +97,7 @@ async function main(): Promise<void> {
     },
     async ({ id }) => {
       try {
-        const detail = await client.getEmail(id);
+        const detail = await getClient().getEmail(id);
         let body = "";
         if (detail.raw?.data?.length) {
           const parsed = await simpleParser(Buffer.from(detail.raw.data));
@@ -135,7 +146,7 @@ async function main(): Promise<void> {
     },
     async ({ path, mode, maxBytes }) => {
       try {
-        const { bytes, contentType, filename } = await client.download(path);
+        const { bytes, contentType, filename } = await getClient().download(path);
 
         if (mode === "file") {
           const dir = join(tmpdir(), "openarchiver-mcp");
@@ -177,7 +188,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // stderr is safe for logging; stdout is reserved for the MCP protocol.
-  console.error(`openarchiver-mcp connected (API base: ${config.apiBase})`);
+  console.error("openarchiver-mcp connected (stdio)");
 }
 
 main().catch((err) => {
