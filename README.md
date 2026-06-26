@@ -1,6 +1,8 @@
 # openarchiver-mcp
 
+[![npm version](https://img.shields.io/npm/v/openarchiver-mcp)](https://www.npmjs.com/package/openarchiver-mcp)
 [![CI](https://github.com/arnd/openarchiver-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/arnd/openarchiver-mcp/actions/workflows/ci.yml)
+[![MCP Badge](https://lobehub.com/badge/mcp/arnd-openarchiver-mcp)](https://lobehub.com/mcp/arnd-openarchiver-mcp)
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI assistant (Claude Code, Claude
 Desktop, …) search and read your [OpenArchiver](https://openarchiver.com) email archive.
