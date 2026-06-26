@@ -53,7 +53,23 @@ async function main(): Promise<void> {
     return client;
   };
 
-  const server = new McpServer({ name: "openarchiver-mcp", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "openarchiver-mcp", version: "0.1.0" },
+    {
+      // Surfaced to clients in the initialize response so users/agents learn how to
+      // configure the server at runtime without the secret ever passing through a tool.
+      instructions:
+        "Read-only wrapper around the OpenArchiver email-archive REST API. " +
+        "Requires two environment variables, set by the MCP client: " +
+        "OPENARCHIVER_BASE_URL (your OpenArchiver instance URL, e.g. https://openarchiver.example.com — " +
+        "the /api/v1 suffix is added automatically) and OPENARCHIVER_API_KEY (an API key with the " +
+        "'search:archive' and 'read:archive' permissions). Optional: OPENARCHIVER_TIMEOUT_MS " +
+        "(request timeout in ms, default 30000). Typical workflow: search_archive to find emails " +
+        "(returns ids) → get_email to read one by id (lists attachments with a storagePath) → " +
+        "get_attachment to download an attachment. An authentication error or a '… is not set' error " +
+        "means these environment variables are missing or invalid in the client configuration.",
+    },
+  );
 
   server.registerTool(
     "search_archive",
