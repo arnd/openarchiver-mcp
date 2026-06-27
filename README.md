@@ -7,6 +7,11 @@
 An [MCP](https://modelcontextprotocol.io) server that lets an AI assistant (Claude Code, Claude
 Desktop, …) search and read your [OpenArchiver](https://openarchiver.com) email archive.
 
+> ⚠️ **Unofficial.** Independent, community-maintained project — not affiliated with, endorsed by,
+> or supported by OpenArchiver / LogicLabs. The "OpenArchiver" name is used only to describe
+> compatibility. Please report issues [here](https://github.com/arnd/openarchiver-mcp/issues), not
+> to the OpenArchiver project.
+
 It is a thin, typed wrapper around the OpenArchiver REST API and exposes three tools:
 
 | Tool | What it does |
