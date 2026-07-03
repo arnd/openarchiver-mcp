@@ -36,7 +36,7 @@ jobs:
         oa_version: ['v0.5.0', 'v0.4.2']
     name: integration (OpenArchiver ${{ matrix.oa_version }})
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '26'
