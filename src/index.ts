@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,6 +20,31 @@ import {
 } from "./format.js";
 
 const DEFAULT_MAX_ATTACHMENT_BYTES = 5_000_000;
+
+// Read the version from the package manifest rather than hardcoding it here: this
+// value is what clients show for the server (serverInfo in the initialize response),
+// and a hand-maintained copy silently goes stale on every release. From dist/index.js
+// this resolves to the package's own package.json, which npm always ships.
+const { version: VERSION } = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
+
+const HELP = `openarchiver-mcp ${VERSION}
+
+An MCP server that lets an AI assistant search and read an OpenArchiver email archive.
+It speaks the Model Context Protocol over stdio and is normally launched by an MCP
+client, not by hand.
+
+Usage: openarchiver-mcp [--version] [--help]
+
+Environment:
+  OPENARCHIVER_BASE_URL   required  your OpenArchiver instance, e.g. https://archive.example.com
+                                    (the /api/v1 suffix is added automatically)
+  OPENARCHIVER_API_KEY    required  API key with the search:archive and read:archive permissions
+  OPENARCHIVER_TIMEOUT_MS optional  request timeout in ms (default 30000)
+
+Tools: search_archive, get_email, check_integrity, get_attachment (all read-only).
+Docs: https://github.com/arnd/openarchiver-mcp`;
 
 type ToolResult = {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -40,6 +66,18 @@ function text(value: string): ToolResult {
 }
 
 async function main(): Promise<void> {
+  // Handled before the transport is connected, so stdout is still ours to write to;
+  // once the server is serving, stdout carries the MCP protocol and nothing else.
+  const argv = process.argv.slice(2);
+  if (argv.includes("--version") || argv.includes("-v")) {
+    console.log(VERSION);
+    return;
+  }
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+
   // Build the client lazily so the server can start and answer tools/list even
   // when OPENARCHIVER_BASE_URL/OPENARCHIVER_API_KEY are not set — e.g. when an MCP
   // directory or client validates the package by listing its tools. Config is
@@ -55,7 +93,7 @@ async function main(): Promise<void> {
   };
 
   const server = new McpServer(
-    { name: "openarchiver-mcp", version: "0.1.0" },
+    { name: "openarchiver-mcp", version: VERSION },
     {
       // Surfaced to clients in the initialize response so users/agents learn how to
       // configure the server at runtime without the secret ever passing through a tool.
