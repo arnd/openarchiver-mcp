@@ -61,6 +61,20 @@ export interface EmailDetail {
   raw?: { type: "Buffer"; data: number[] } | null;
 }
 
+/** One line of a `/integrity/{id}` verification report: the email itself or one attachment. */
+export interface IntegrityCheckResult {
+  type: "email" | "attachment";
+  id: string;
+  filename?: string;
+  isValid: boolean;
+  /** Why the item failed; absent when `isValid` is true. */
+  reason?: string;
+  /** SHA-256 recorded at archival time. */
+  storedHash: string;
+  /** SHA-256 computed during this verification (empty when the file could not be read). */
+  computedHash: string;
+}
+
 export interface DownloadResult {
   bytes: Buffer;
   contentType: string;
@@ -133,6 +147,19 @@ export class OpenArchiverClient {
   async getEmail(id: string): Promise<EmailDetail> {
     const res = await this.request(`/archived-emails/${encodeURIComponent(id)}`);
     return (await res.json()) as EmailDetail;
+  }
+
+  async checkIntegrity(id: string): Promise<IntegrityCheckResult[]> {
+    const res = await this.request(`/integrity/${encodeURIComponent(id)}`);
+    const data = await res.json();
+    // The endpoint returns a bare array; anything else means the API changed under us,
+    // and a clear error beats a downstream "results.filter is not a function".
+    if (!Array.isArray(data)) {
+      throw new OpenArchiverError(
+        "Unexpected response from the OpenArchiver integrity endpoint (expected a list of results).",
+      );
+    }
+    return data as IntegrityCheckResult[];
   }
 
   async download(path: string): Promise<DownloadResult> {

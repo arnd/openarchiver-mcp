@@ -1,6 +1,6 @@
 import { convert as htmlToText } from "html-to-text";
 
-import type { EmailDetail, SearchResponse } from "./client.js";
+import type { EmailDetail, IntegrityCheckResult, SearchResponse } from "./client.js";
 
 /** Format an epoch-millis number or ISO string as an ISO timestamp; fall back to the raw value. */
 export function formatDate(value: string | number | undefined | null): string {
@@ -152,4 +152,40 @@ export function stripHtml(html: string): string {
   })
     .replace(/ /g, " ") // normalize &nbsp; to a plain space
     .trim();
+}
+
+/**
+ * Render an integrity report. The verdict goes first — that is the whole point of
+ * the call — and full hashes are only spelled out for items that failed, so a
+ * clean report stays short.
+ */
+export function formatIntegrityResults(id: string, results: IntegrityCheckResult[]): string {
+  if (results.length === 0) {
+    return `Integrity check for ${id}: no items returned by OpenArchiver.`;
+  }
+
+  const failed = results.filter((r) => !r.isValid);
+  const verdict =
+    failed.length === 0
+      ? `PASSED — all ${results.length} item(s) match their archived SHA-256 hash.`
+      : `FAILED — ${failed.length} of ${results.length} item(s) do not match their archived SHA-256 hash.`;
+
+  const lines = [`Integrity check for ${id}: ${verdict}`, ""];
+
+  for (const result of results) {
+    const label =
+      result.type === "attachment"
+        ? `attachment ${result.filename || "(unnamed)"} [${result.id}]`
+        : `email [${result.id}]`;
+    lines.push(`  ${result.isValid ? "✓" : "✗"} ${label}`);
+    if (!result.isValid) {
+      lines.push(
+        `      reason:   ${result.reason || "unknown"}`,
+        `      stored:   ${result.storedHash || "(none)"}`,
+        `      computed: ${result.computedHash || "(unreadable)"}`,
+      );
+    }
+  }
+
+  return lines.join("\n");
 }

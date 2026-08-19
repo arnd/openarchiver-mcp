@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { EmailDetail, SearchResponse } from "./client.js";
+import type { EmailDetail, IntegrityCheckResult, SearchResponse } from "./client.js";
 import {
   classifyAttachment,
   formatBytes,
   formatEmail,
+  formatIntegrityResults,
   formatSearchResults,
   safeAttachmentFilename,
   snippet,
@@ -153,5 +154,66 @@ describe("stripHtml", () => {
       assert.doesNotMatch(out, /bad\(\)/, html);
       assert.doesNotMatch(out, /x\{\}/, html);
     }
+  });
+});
+
+describe("formatIntegrityResults", () => {
+  const passing: IntegrityCheckResult[] = [
+    { type: "email", id: "e1", isValid: true, storedHash: "aa", computedHash: "aa" },
+    {
+      type: "attachment",
+      id: "a1",
+      filename: "invoice.pdf",
+      isValid: true,
+      storedHash: "bb",
+      computedHash: "bb",
+    },
+  ];
+
+  it("reports a clean run without spelling out hashes", () => {
+    const out = formatIntegrityResults("e1", passing);
+    assert.match(out, /PASSED — all 2 item\(s\)/);
+    assert.match(out, /✓ email \[e1\]/);
+    assert.match(out, /✓ attachment invoice\.pdf \[a1\]/);
+    assert.doesNotMatch(out, /stored:/);
+  });
+
+  it("flags failures with reason and both hashes", () => {
+    const out = formatIntegrityResults("e1", [
+      passing[0],
+      {
+        type: "attachment",
+        id: "a2",
+        filename: "note.txt",
+        isValid: false,
+        reason: "Stored hash does not match current hash.",
+        storedHash: "cc",
+        computedHash: "dd",
+      },
+    ]);
+    assert.match(out, /FAILED — 1 of 2 item\(s\)/);
+    assert.match(out, /✗ attachment note\.txt \[a2\]/);
+    assert.match(out, /reason:   Stored hash does not match/);
+    assert.match(out, /stored:   cc/);
+    assert.match(out, /computed: dd/);
+  });
+
+  it("marks an unreadable attachment (empty computed hash) explicitly", () => {
+    const out = formatIntegrityResults("e1", [
+      {
+        type: "attachment",
+        id: "a3",
+        filename: "gone.bin",
+        isValid: false,
+        reason: "Could not read attachment file from storage.",
+        storedHash: "ee",
+        computedHash: "",
+      },
+    ]);
+    assert.match(out, /computed: \(unreadable\)/);
+  });
+
+  it("handles an empty report", () => {
+    assert.match(formatIntegrityResults("e1", []), /no items returned/);
   });
 });

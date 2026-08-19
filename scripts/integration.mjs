@@ -3,7 +3,7 @@
 // compose, bootstrap it (auto-create admin -> login -> API key -> mbox ingestion
 // source), wait for the import + search index to populate, then drive the *built*
 // MCP server (dist/index.js) over stdio against that instance and assert that
-// search_archive, get_email and get_attachment all work against the real REST API.
+// search_archive, get_email, check_integrity and get_attachment all work against the real REST API.
 //
 // Requires Docker + `docker compose` v2. Creates and (in `finally`) destroys the
 // stack with `down -v`, so each run starts from zero users — which lets
@@ -174,7 +174,16 @@ async function runMcpAssertions(apiKey) {
     const email = toolText(await client.callTool({ name: "get_email", arguments: { id } }));
     assert.match(email, new RegExp(NEEDLE), "get_email output did not contain the needle");
 
-    // 3. get_email on the attachment message, then get_attachment on note.txt.
+    // 3. check_integrity re-hashes that email in storage and must report a clean bill.
+    const integrity = toolText(await client.callTool({ name: "check_integrity", arguments: { id } }));
+    assert.match(
+      integrity,
+      /PASSED/,
+      `check_integrity did not pass for a freshly ingested email:\n${integrity}`,
+    );
+    console.log("  check_integrity ok (hashes verified)");
+
+    // 4. get_email on the attachment message, then get_attachment on note.txt.
     //    Find a hit that actually carries the note.txt attachment.
     let storagePath;
     for (const hitId of [...search.matchAll(/^\s*id:\s*(\S+)/gm)].map((m) => m[1])) {
@@ -200,7 +209,7 @@ async function runMcpAssertions(apiKey) {
     );
     console.log("  get_attachment ok (note.txt content returned)");
 
-    // 4. Robustness: an unknown id surfaces a clean error, not a crash.
+    // 5. Robustness: an unknown id surfaces a clean error, not a crash.
     const missing = await client.callTool({ name: "get_email", arguments: { id: "does-not-exist" } });
     assert.ok(missing.isError, "get_email with an unknown id should return isError");
     console.log("  get_email(unknown id) ok (clean error)");

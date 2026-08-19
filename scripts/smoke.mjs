@@ -9,7 +9,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const EXPECTED = ["search_archive", "get_email", "get_attachment"];
+const EXPECTED = ["search_archive", "get_email", "get_attachment", "check_integrity"];
 
 // Strip any inherited credentials so we truly exercise the no-config startup path.
 const env = { ...process.env };

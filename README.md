@@ -12,12 +12,13 @@ Desktop, …) search and read your [OpenArchiver](https://openarchiver.com) emai
 > compatibility. Please report issues [here](https://github.com/arnd/openarchiver-mcp/issues), not
 > to the OpenArchiver project.
 
-It is a thin, typed wrapper around the OpenArchiver REST API and exposes three tools:
+It is a thin, typed wrapper around the OpenArchiver REST API and exposes four tools:
 
 | Tool | What it does |
 |------|--------------|
 | `search_archive` | Full-text search across archived emails (subject, body, **and extracted attachment text**). Returns compact hits, each with an `id`. |
 | `get_email` | Fetch one email by id: metadata, full body, and an attachment list (each with a `storagePath`). |
+| `check_integrity` | Re-compute the SHA-256 hashes of an archived email and its attachments and compare them against the hashes stored at archival time — proof that a message has not been altered or corrupted in storage. |
 | `get_attachment` | Download an attachment by its `storagePath`. Default returns it inline (text → text, images → image content, other binaries → base64). With `mode: "file"` it saves the bytes to a server-managed temp file and returns only the path — handy for large binaries to keep base64 out of the context (path only usable when the server runs locally; the server picks the path, callers can't). |
 
 All operations are **read-only**.
@@ -60,8 +61,8 @@ npm run test:integration  # full end-to-end test against a real OpenArchiver (ne
 `npm run test:integration` (`scripts/integration.mjs`) is a full end-to-end check. It spins up a
 **throwaway OpenArchiver stack** via `docker compose` (`test/integration/`), auto-creates an admin and
 API key, imports a small fixture mbox through the local-file (mbox) connector, then drives the built
-MCP server over stdio against that live instance and asserts `search_archive`, `get_email` and
-`get_attachment` all work. The stack is torn down (`docker compose down -v`) afterwards, so no state
+MCP server over stdio against that live instance and asserts `search_archive`, `get_email`,
+`check_integrity` and `get_attachment` all work. The stack is torn down (`docker compose down -v`) afterwards, so no state
 persists and no real secrets are involved.
 
 > Requires **Docker** and **`docker compose` v2**. It pulls the OpenArchiver stack images
