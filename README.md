@@ -43,6 +43,17 @@ npx -y openarchiver-mcp
 
 (It's normally launched by your MCP client, not by hand — see below.)
 
+Two flags work without an MCP client, which is handy when you need to tell someone which build you
+are actually running:
+
+```bash
+npx -y openarchiver-mcp --version   # prints e.g. 1.3.0
+npx -y openarchiver-mcp --help      # usage, environment variables, tool list
+```
+
+The same version is reported to the client in the MCP `initialize` handshake (`serverInfo`), so it
+also shows up in e.g. Claude Code's `/mcp` view and the MCP Inspector.
+
 ### From source
 
 ```bash
