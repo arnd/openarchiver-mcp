@@ -160,10 +160,10 @@ npx @modelcontextprotocol/inspector node --env-file=.env dist/index.js
 ## How it works
 
 - `src/config.ts` — reads and validates env vars; normalizes the base URL to `…/api/v1`.
-- `src/client.ts` — `OpenArchiverClient` (`search`, `getEmail`, `download`); `fetch` is injectable for
+- `src/client.ts` — `OpenArchiverClient` (`search`, `getEmail`, `checkIntegrity`, `download`); `fetch` is injectable for
   testing; maps HTTP errors (401/403/404/…) to actionable messages.
 - `src/format.ts` — pure functions that render API responses into compact text for the model.
-- `src/index.ts` — registers the three MCP tools and serves them over stdio. `get_email` parses the
+- `src/index.ts` — registers the four MCP tools and serves them over stdio. `get_email` parses the
   raw RFC822 message (returned by the API) with [`mailparser`](https://nodemailer.com/extras/mailparser/)
   to produce a readable body.
 
