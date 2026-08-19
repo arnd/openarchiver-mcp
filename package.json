@@ -43,9 +43,9 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "html-to-text": "^10.0.0",
-    "mailparser": "^3.7.1",
+    "mailparser": "^3.9.15",
     "zod": "^4.4.3"
   },
   "devDependencies": {
