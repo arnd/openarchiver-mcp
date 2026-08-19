@@ -1,0 +1,103 @@
+#!/usr/bin/env node
+// Checks whether upstream OpenArchiver has published a newer OSS dev snapshot than the
+// one pinned in the Integration matrix, and (with --write) re-pins it.
+//
+// The matrix carries one commit-SHA tag as an early warning for breaking changes ahead
+// of a release. That pin is a fixed commit, so it silently goes stale -- this is what the
+// scheduled `Snapshot check` workflow runs to catch that.
+//
+// Snapshot tags are the 7-hex-char commit tags on Docker Hub. Semver tags (v0.5.2) are
+// releases and belong in the blocking matrix legs, not here; `-enterprise` images need a
+// license and are skipped.
+//
+// Exit code is always 0 for "worked"; the outcome is reported on stdout and, under
+// Actions, written to $GITHUB_OUTPUT as changed/current/latest/label.
+import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
+
+const WORKFLOW = ".github/workflows/integration.yml";
+const TAGS_URL =
+  "https://hub.docker.com/v2/repositories/logiclabshq/open-archiver/tags?page_size=100&ordering=last_updated";
+const UPSTREAM_REPO = "LogicLabs-OU/OpenArchiver";
+const SNAPSHOT_RE = /^[0-9a-f]{7,40}$/;
+
+const write = process.argv.includes("--write");
+
+function output(pairs) {
+  console.log(
+    Object.entries(pairs)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n")
+  );
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      Object.entries(pairs)
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n") + "\n"
+    );
+  }
+}
+
+// The commit subject ("V0.5.3 dev") is only used for the comment above the pin, so a
+// failed lookup must not fail the check.
+async function commitLabel(sha) {
+  try {
+    const headers = { accept: "application/vnd.github+json" };
+    if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const res = await fetch(`https://api.github.com/repos/${UPSTREAM_REPO}/commits/${sha}`, {
+      headers,
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body.commit?.message?.split("\n")[0]?.replace(/\s*\(#\d+\)\s*$/, "") ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const res = await fetch(TAGS_URL);
+if (!res.ok) throw new Error(`Docker Hub tag listing failed (${res.status})`);
+const { results } = await res.json();
+
+const snapshots = results
+  .filter((t) => SNAPSHOT_RE.test(t.name) && !t.name.endsWith("-enterprise"))
+  .sort((a, b) => new Date(b.last_updated) - new Date(a.last_updated));
+if (snapshots.length === 0) throw new Error("no OSS snapshot tags found on Docker Hub");
+const latest = snapshots[0];
+
+const workflow = readFileSync(WORKFLOW, "utf8");
+const pinned = workflow.match(/oa_version: \['([0-9a-f]{7,40})'/)?.[1];
+if (!pinned) throw new Error(`could not find the snapshot pin in ${WORKFLOW}`);
+
+if (latest.name === pinned) {
+  output({ changed: "false", current: pinned, latest: latest.name });
+  console.log(`Snapshot pin ${pinned} is current (pushed ${latest.last_updated.slice(0, 10)}).`);
+  process.exit(0);
+}
+
+// Only move forward: a tag list reordering must never re-pin an older snapshot.
+const pinnedTag = results.find((t) => t.name === pinned);
+if (pinnedTag && new Date(latest.last_updated) <= new Date(pinnedTag.last_updated)) {
+  output({ changed: "false", current: pinned, latest: latest.name });
+  console.log(`Newest snapshot ${latest.name} is not newer than the pinned ${pinned}; ignoring.`);
+  process.exit(0);
+}
+
+const date = latest.last_updated.slice(0, 10);
+const label = (await commitLabel(latest.name)) ?? "dev";
+output({ changed: "true", current: pinned, latest: latest.name, label, date });
+console.log(`New snapshot: ${pinned} -> ${latest.name} ("${label}", pushed ${date}).`);
+
+if (!write) process.exit(0);
+
+const updated = workflow
+  .replace(/oa_version: \['[0-9a-f]{7,40}'/, `oa_version: ['${latest.name}'`)
+  .replace(
+    /# [0-9a-f]{7,40} = "[^"]*" snapshot \(head of upstream main as of \d{4}-\d{2}-\d{2}\)/,
+    `# ${latest.name} = "${label}" snapshot (head of upstream main as of ${date})`
+  )
+  .replace(/matrix\.oa_version == '[0-9a-f]{7,40}'/, `matrix.oa_version == '${latest.name}'`);
+
+if (updated === workflow) throw new Error(`--write made no change to ${WORKFLOW}`);
+writeFileSync(WORKFLOW, updated);
+console.log(`Re-pinned ${WORKFLOW}.`);
