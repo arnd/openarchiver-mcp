@@ -105,6 +105,51 @@ describe("OpenArchiverClient.getEmail", () => {
   });
 });
 
+describe("OpenArchiverClient.checkIntegrity", () => {
+  it("encodes the id into the integrity path and returns the report array", async () => {
+    const recorded: Recorded[] = [];
+    const report = [
+      { type: "email", id: "abc", isValid: true, storedHash: "aa", computedHash: "aa" },
+    ];
+    const client = new OpenArchiverClient(
+      "https://host/api/v1",
+      "secret",
+      stubFetch(jsonResponse(report), recorded),
+    );
+
+    const result = await client.checkIntegrity("a/b c");
+    assert.deepEqual(result, report);
+    assert.match(recorded[0].url, /\/api\/v1\/integrity\/a%2Fb%20c$/);
+    assert.equal(recorded[0].headers["x-api-key"], "secret");
+  });
+
+  it("maps 404 to an actionable error", async () => {
+    const client = new OpenArchiverClient(
+      "https://host/api/v1",
+      "secret",
+      stubFetch(new Response("missing", { status: 404 })),
+    );
+    await assert.rejects(client.checkIntegrity("nope"), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.equal(err.status, 404);
+      return true;
+    });
+  });
+
+  it("rejects a non-array payload instead of passing it on", async () => {
+    const client = new OpenArchiverClient(
+      "https://host/api/v1",
+      "secret",
+      stubFetch(jsonResponse({ message: "something else" })),
+    );
+    await assert.rejects(client.checkIntegrity("abc"), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.match(err.message, /expected a list of results/);
+      return true;
+    });
+  });
+});
+
 describe("OpenArchiverClient.download", () => {
   it("returns bytes, content-type and the parsed filename", async () => {
     const payload = Buffer.from("PDFDATA");

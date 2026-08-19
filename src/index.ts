@@ -12,6 +12,7 @@ import { loadConfig } from "./config.js";
 import {
   classifyAttachment,
   formatEmail,
+  formatIntegrityResults,
   formatSearchResults,
   safeAttachmentFilename,
   stripHtml,
@@ -66,7 +67,8 @@ async function main(): Promise<void> {
         "'search:archive' and 'read:archive' permissions). Optional: OPENARCHIVER_TIMEOUT_MS " +
         "(request timeout in ms, default 30000). Typical workflow: search_archive to find emails " +
         "(returns ids) → get_email to read one by id (lists attachments with a storagePath) → " +
-        "get_attachment to download an attachment. An authentication error or a '… is not set' error " +
+        "get_attachment to download an attachment. check_integrity re-verifies an archived email's " +
+        "SHA-256 hashes on demand. An authentication error or a '… is not set' error " +
         "means these environment variables are missing or invalid in the client configuration.",
     },
   );
@@ -124,6 +126,31 @@ async function main(): Promise<void> {
           }
         }
         return text(formatEmail(detail, body));
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "check_integrity",
+    {
+      title: "Verify an archived email's integrity",
+      description:
+        "Re-compute the SHA-256 hashes of an archived email and each of its attachments and compare " +
+        "them against the hashes stored at archival time. Use this to prove an archived message has " +
+        "not been altered or corrupted in storage. Returns a per-item pass/fail report.",
+      inputSchema: {
+        id: z
+          .string()
+          .min(1)
+          .describe("The archived email id (a UUID), as returned by search_archive."),
+      },
+    },
+    async ({ id }) => {
+      try {
+        const results = await getClient().checkIntegrity(id);
+        return text(formatIntegrityResults(id, results));
       } catch (err) {
         return errorResult(err);
       }
