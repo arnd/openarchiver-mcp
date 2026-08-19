@@ -1,0 +1,109 @@
+name: Snapshot check
+
+# The Integration matrix pins one upstream OpenArchiver dev snapshot by commit SHA as an
+# early warning for breaking changes. That pin is a fixed commit, so it goes stale silently
+# (the previous one sat unnoticed for ~5 months, through two releases). This job watches
+# Docker Hub for a newer OSS snapshot, runs the integration test against it, and opens a PR
+# re-pinning the matrix -- with the result of that run in the PR body.
+#
+# Values derived from upstream (tag names, commit subjects) are passed to the shell through
+# env vars, never interpolated into the script with ${{ }}: a commit subject is untrusted
+# input and would otherwise be a command injection.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1' # weekly, Mondays at 04:17 UTC (after the nightly Integration run)
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Look for a newer upstream snapshot
+        id: check
+        run: node scripts/check-snapshot.mjs --write
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Skip if a PR for this snapshot already exists
+        if: steps.check.outputs.changed == 'true'
+        id: existing
+        run: |
+          branch="ci/snapshot-$LATEST"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if [ -n "$(gh pr list --head "$branch" --state all --json number --jq '.[].number')" ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "open=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.check.outputs.latest }}
+
+      - run: npm ci
+        if: steps.check.outputs.changed == 'true' && steps.existing.outputs.open == 'false'
+
+      # Non-blocking on purpose: a failing snapshot is the signal worth a PR, not a reason
+      # to stay silent. The outcome is reported in the PR body either way.
+      - name: Integration test against the new snapshot
+        id: verify
+        if: steps.check.outputs.changed == 'true' && steps.existing.outputs.open == 'false'
+        continue-on-error: true
+        run: npm run test:integration
+        env:
+          OA_IMAGE_TAG: ${{ steps.check.outputs.latest }}
+
+      - name: Open the re-pin PR
+        if: steps.check.outputs.changed == 'true' && steps.existing.outputs.open == 'false'
+        run: |
+          set -euo pipefail
+
+          if [ "$OUTCOME" = "success" ]; then
+            verdict="The integration test **passes** against \`$LATEST\`."
+          else
+            verdict="The integration test **fails** against \`$LATEST\` (see the \"Integration test against the new snapshot\" step in [this run]($RUN_URL)). That is the early warning this pin exists for: the wrapper or the test harness likely needs a change before this is merged."
+          fi
+
+          {
+            echo "Upstream published a newer OSS dev snapshot, so the Integration matrix pin is stale."
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Current pin | \`$CURRENT\` |"
+            echo "| New snapshot | \`$LATEST\` (pushed $DATE) |"
+            echo "| Upstream commit | $LABEL |"
+            echo
+            echo "$verdict"
+            echo
+            echo "> Opened by the \`Snapshot check\` workflow. PRs created with \`GITHUB_TOKEN\` do not"
+            echo "> trigger other workflows, so the checks below start out empty -- the snapshot was"
+            echo "> verified in the run linked above instead. Close and reopen the PR to run the full matrix."
+          } > /tmp/pr-body.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git commit -qam "ci: re-pin OpenArchiver dev snapshot to $LATEST"
+          git push -q origin "$BRANCH"
+          gh pr create \
+            --title "ci: re-pin OpenArchiver dev snapshot to $LATEST" \
+            --body-file /tmp/pr-body.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ steps.verify.outcome }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
+          CURRENT: ${{ steps.check.outputs.current }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          LABEL: ${{ steps.check.outputs.label }}
+          DATE: ${{ steps.check.outputs.date }}
