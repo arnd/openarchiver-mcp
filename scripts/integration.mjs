@@ -18,13 +18,13 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const COMPOSE_FILE = join(repoRoot, "test/integration/docker-compose.test.yml");
 
-// Which OpenArchiver image to test against. Default v0.5.0; override via the
+// Which OpenArchiver image to test against. Default v0.5.2; override via the
 // OA_IMAGE_TAG env var or the first CLI arg, e.g.
 //   OA_IMAGE_TAG=v0.4.2 npm run test:integration
 //   npm run test:integration -- v0.4.2
-// Only OSS semver tags (v0.1.1 … v0.5.0) are freely pullable; v1.x exist only as
+// Only OSS semver tags (v0.1.1 … v0.5.2) are freely pullable; v1.x exist only as
 // `-enterprise` images (license required), e.g. OA_IMAGE_TAG=v1.4.2-enterprise.
-const OA_IMAGE_TAG = process.env.OA_IMAGE_TAG || process.argv[2] || "v0.5.0";
+const OA_IMAGE_TAG = process.env.OA_IMAGE_TAG || process.argv[2] || "v0.5.2";
 // Per-tag compose project keeps containers/volumes isolated between versions.
 const PROJECT = `oa-int-${OA_IMAGE_TAG.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
 const COMPOSE = ["compose", "-p", PROJECT, "-f", COMPOSE_FILE];
@@ -65,22 +65,43 @@ async function pollUntil(label, timeoutMs, fn) {
 }
 
 async function bootstrap() {
-  // GET /auth/status both reports setup state and (with ADMIN_* env set on a fresh
-  // db) auto-creates the admin user. Polling it also serves as our readiness check.
-  await pollUntil("OpenArchiver to become ready", READY_TIMEOUT_MS, async () => {
+  // GET /auth/status reports setup state; polling it is also our readiness check.
+  // Up to v0.5.2 it *additionally* auto-created the admin from ADMIN_EMAIL/ADMIN_PASSWORD
+  // as a side effect. Upstream removed that in the v0.5.3 dev line ("this endpoint is a
+  // read-only probe and must never provision an account as a side effect"), so provision
+  // explicitly via POST /auth/setup, which exists in every version we test and returns a
+  // login result. Falls back to /auth/login when the admin already exists.
+  const needsSetup = await pollUntil("OpenArchiver to become ready", READY_TIMEOUT_MS, async () => {
     const res = await fetch(`${API}/auth/status`);
-    if (res.ok) return true;
-    return undefined;
+    if (!res.ok) return undefined;
+    const body = await res.json();
+    return Boolean(body.needsSetup);
   });
 
-  const loginRes = await fetch(`${API}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
-  });
-  if (!loginRes.ok) throw new Error(`login failed (${loginRes.status}): ${await loginRes.text()}`);
-  const { accessToken } = await loginRes.json();
-  assert.ok(accessToken, "login response had no accessToken");
+  let accessToken;
+  if (needsSetup) {
+    const setupRes = await fetch(`${API}/auth/setup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+        first_name: "Admin",
+        last_name: "User",
+      }),
+    });
+    if (!setupRes.ok) throw new Error(`admin setup failed (${setupRes.status}): ${await setupRes.text()}`);
+    ({ accessToken } = await setupRes.json());
+  } else {
+    const loginRes = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    });
+    if (!loginRes.ok) throw new Error(`login failed (${loginRes.status}): ${await loginRes.text()}`);
+    ({ accessToken } = await loginRes.json());
+  }
+  assert.ok(accessToken, "auth response had no accessToken");
   const bearer = { authorization: `Bearer ${accessToken}`, "content-type": "application/json" };
 
   const keyRes = await fetch(`${API}/api-keys`, {

@@ -1,16 +1,16 @@
 # Throwaway OpenArchiver stack for the MCP integration test.
-# Mirrors the upstream OpenArchiver docker-compose (v0.5.0) but minimised for CI:
+# Mirrors the upstream OpenArchiver docker-compose (v0.5.2) but minimised for CI:
 # only port 3000 is exposed (the frontend proxies /api/v1 -> backend /v1), the mbox
 # fixture is bind-mounted read-only at /fixtures, and all state lives in named volumes
 # that the orchestrator drops with `down -v` so every run starts from zero users
 # (which lets ADMIN_EMAIL/ADMIN_PASSWORD auto-create the admin via GET /api/v1/auth/status).
 #
-# Image tags are pinned to the versions this MCP is developed against (OpenArchiver 0.5.0).
+# Image tags are pinned to the versions this MCP is developed against (OpenArchiver 0.5.2).
 
 services:
     open-archiver:
-        # Tag is set by scripts/integration.mjs via the OA_IMAGE_TAG env var (default v0.5.0).
-        image: logiclabshq/open-archiver:${OA_IMAGE_TAG:-v0.5.0}
+        # Tag is set by scripts/integration.mjs via the OA_IMAGE_TAG env var (default v0.5.2).
+        image: logiclabshq/open-archiver:${OA_IMAGE_TAG:-v0.5.2}
         restart: "no"
         ports:
             - '3000:3000'
