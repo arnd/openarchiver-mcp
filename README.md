@@ -28,8 +28,8 @@ All operations are **read-only**.
 - An OpenArchiver instance and an **API key** with the permissions `search:archive` and `read:archive`
   (create one in OpenArchiver under *Settings → API keys*, or via `POST /api/v1/api-keys`).
 
-> **OpenArchiver compatibility:** developed and tested against **OpenArchiver 0.5.0** (REST API `v1`).
-> OpenArchiver has no stable public OpenAPI spec yet, so other versions may differ; 0.5.0 or newer is
+> **OpenArchiver compatibility:** developed and tested against **OpenArchiver 0.5.2** (REST API `v1`).
+> OpenArchiver has no stable public OpenAPI spec yet, so other versions may differ; 0.5.2 or newer is
 > recommended.
 
 ## Install
@@ -68,7 +68,7 @@ persists and no real secrets are involved.
 > and waits for the asynchronous import/indexing, so a run takes a few minutes. It is not part of
 > the fast unit CI — it runs nightly / on demand via the `Integration` workflow.
 
-By default it tests against OpenArchiver **v0.5.0**. To test another version, set `OA_IMAGE_TAG`
+By default it tests against OpenArchiver **v0.5.2**. To test another version, set `OA_IMAGE_TAG`
 (or pass it as an argument):
 
 ```bash
@@ -76,12 +76,14 @@ OA_IMAGE_TAG=v0.4.2 npm run test:integration
 npm run test:integration -- v0.4.2          # equivalent
 
 # test several versions in sequence:
-for v in v0.5.0 v0.4.2; do OA_IMAGE_TAG=$v npm run test:integration || break; done
+for v in v0.5.2 v0.4.2; do OA_IMAGE_TAG=$v npm run test:integration || break; done
 ```
 
-> Only OSS semver tags (`v0.1.1` … `v0.5.0`) are freely pullable. The `v1.x` releases are published
+> Only OSS semver tags (`v0.1.1` … `v0.5.2`) are freely pullable. The `v1.x` releases are published
 > only as `-enterprise` images (e.g. `OA_IMAGE_TAG=v1.4.2-enterprise`), which require a license and
-> may bootstrap differently. The CI `Integration` workflow runs a matrix over `v0.5.0` and `v0.4.2`.
+> may bootstrap differently. The CI `Integration` workflow runs a matrix over `v0.5.2`, `v0.4.2` and
+> the pre-release `2de3d60` snapshot (head of upstream `main`, non-blocking: it reports but
+> cannot fail the workflow).
 > Each run uses host port 3000, so local runs must be sequential (the loop above), not parallel.
 
 ## Configuration
