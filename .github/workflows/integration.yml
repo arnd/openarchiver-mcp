@@ -18,6 +18,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/integration.yml'
+      - '.github/oa-snapshot.json'
   pull_request:
     branches: [main]
     paths: *paths
@@ -26,21 +27,40 @@ permissions:
   contents: read
 
 jobs:
+  # The versions live in .github/oa-snapshot.json rather than in this file, because a
+  # matrix cannot read a file and the `Snapshot check` bot cannot write one: GitHub
+  # rejects every GITHUB_TOKEN push that touches .github/workflows/**. This job turns
+  # that data file into the matrix. Only OSS semver tags (v0.1.1 … v0.5.2) are freely
+  # pullable; v1.x are `-enterprise` only.
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pin.outputs.matrix }}
+      snapshot: ${{ steps.pin.outputs.snapshot }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: pin
+        run: |
+          set -euo pipefail
+          file=.github/oa-snapshot.json
+          {
+            echo "matrix=$(jq -c '[.snapshot] + .releases' "$file")"
+            echo "snapshot=$(jq -r '.snapshot' "$file")"
+          } >> "$GITHUB_OUTPUT"
+          jq -r '"Testing against: \(.snapshot) (\(.label), \(.date)) + \(.releases | join(", "))"' "$file"
+
   integration:
+    needs: versions
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # OpenArchiver versions to test the MCP against. Only OSS semver tags
-        # (v0.1.1 … v0.5.2) are freely pullable; v1.x are `-enterprise` only.
-        # 2de3d60 = "V0.5.3 dev" snapshot (head of upstream main as of 2026-08-18),
-        # an early warning for breaking changes; bump it when a newer snapshot lands.
-        oa_version: ['2de3d60', 'v0.5.2', 'v0.4.2']
+        oa_version: ${{ fromJSON(needs.versions.outputs.matrix) }}
     name: integration (OpenArchiver ${{ matrix.oa_version }})
     # The dev snapshot tracks a moving upstream main and boots in dev mode (it runs
     # `pnpm install` from the network), so it reports without failing the workflow.
     # Released tags stay blocking.
-    continue-on-error: ${{ matrix.oa_version == '2de3d60' }}
+    continue-on-error: ${{ matrix.oa_version == needs.versions.outputs.snapshot }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

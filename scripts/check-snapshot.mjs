@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Checks whether upstream OpenArchiver has published a newer OSS dev snapshot than the
-// one pinned in the Integration matrix, and (with --write) re-pins it.
+// one pinned for the Integration matrix, and (with --write) re-pins it.
 //
 // The matrix carries one commit-SHA tag as an early warning for breaking changes ahead
 // of a release. That pin is a fixed commit, so it silently goes stale -- this is what the
@@ -14,7 +14,9 @@
 // Actions, written to $GITHUB_OUTPUT as changed/current/latest/label.
 import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 
-const WORKFLOW = ".github/workflows/integration.yml";
+// The pin lives in a plain data file, not in the workflow: GitHub rejects every
+// GITHUB_TOKEN push that touches .github/workflows/**, so a bot cannot re-pin there.
+const PIN_FILE = ".github/oa-snapshot.json";
 const TAGS_URL =
   "https://hub.docker.com/v2/repositories/logiclabshq/open-archiver/tags?page_size=100&ordering=last_updated";
 const UPSTREAM_REPO = "LogicLabs-OU/OpenArchiver";
@@ -38,8 +40,8 @@ function output(pairs) {
   }
 }
 
-// The commit subject ("V0.5.3 dev") is only used for the comment above the pin, so a
-// failed lookup must not fail the check.
+// The commit subject ("V0.5.3 dev") is only a human-readable label in the pin file and
+// in the PR body, so a failed lookup must not fail the check.
 async function commitLabel(sha) {
   try {
     const headers = { accept: "application/vnd.github+json" };
@@ -65,9 +67,11 @@ const snapshots = results
 if (snapshots.length === 0) throw new Error("no OSS snapshot tags found on Docker Hub");
 const latest = snapshots[0];
 
-const workflow = readFileSync(WORKFLOW, "utf8");
-const pinned = workflow.match(/oa_version: \['([0-9a-f]{7,40})'/)?.[1];
-if (!pinned) throw new Error(`could not find the snapshot pin in ${WORKFLOW}`);
+const pin = JSON.parse(readFileSync(PIN_FILE, "utf8"));
+const pinned = pin.snapshot;
+if (!SNAPSHOT_RE.test(pinned ?? "")) {
+  throw new Error(`${PIN_FILE} has no valid "snapshot" commit tag (found: ${pinned})`);
+}
 
 if (latest.name === pinned) {
   output({ changed: "false", current: pinned, latest: latest.name });
@@ -90,14 +94,6 @@ console.log(`New snapshot: ${pinned} -> ${latest.name} ("${label}", pushed ${dat
 
 if (!write) process.exit(0);
 
-const updated = workflow
-  .replace(/oa_version: \['[0-9a-f]{7,40}'/, `oa_version: ['${latest.name}'`)
-  .replace(
-    /# [0-9a-f]{7,40} = "[^"]*" snapshot \(head of upstream main as of \d{4}-\d{2}-\d{2}\)/,
-    `# ${latest.name} = "${label}" snapshot (head of upstream main as of ${date})`
-  )
-  .replace(/matrix\.oa_version == '[0-9a-f]{7,40}'/, `matrix.oa_version == '${latest.name}'`);
-
-if (updated === workflow) throw new Error(`--write made no change to ${WORKFLOW}`);
-writeFileSync(WORKFLOW, updated);
-console.log(`Re-pinned ${WORKFLOW}.`);
+// Rewrite only the three pin fields, so any other key (and the key order) survives.
+writeFileSync(PIN_FILE, `${JSON.stringify({ ...pin, snapshot: latest.name, label, date }, null, 2)}\n`);
+console.log(`Re-pinned ${PIN_FILE}.`);
