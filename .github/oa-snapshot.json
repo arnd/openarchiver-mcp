@@ -1,8 +1,8 @@
 {
   "$comment": "Which OpenArchiver versions the Integration matrix tests against. The snapshot is one commit-SHA tag from Docker Hub, an early warning for upstream breaking changes; the releases are OSS semver tags and stay blocking. This lives outside .github/workflows/ on purpose: GitHub refuses any GITHUB_TOKEN push that touches a workflow file, so the Snapshot check workflow could not open its re-pin PR if the value sat in integration.yml.",
-  "snapshot": "2de3d60",
-  "label": "V0.5.3 dev",
-  "date": "2026-08-18",
+  "snapshot": "704a586",
+  "label": "V0.6.0 release",
+  "date": "2026-08-24",
   "releases": [
     "v0.5.2",
     "v0.4.2"
