@@ -190,3 +190,8 @@ network access required (the HTTP layer is mocked).
   returns most binaries (e.g. PDFs) as base64. For **reading** PDF/Office content, prefer
   `search_archive` / `get_email`, which expose the server-side extracted text.
 - Meilisearch caps `total` at 1000 by default; use `page`/`limit` to paginate.
+- Since OpenArchiver **0.6.0**, permissions are enforced per record: the download endpoint checks that
+  the requested path belongs to an email the API key's role actually covers, and answers `404` (not
+  `403`) when it does not, so a path cannot be probed. With a scoped key, `get_attachment` can
+  therefore report "not found" for a path that exists. A key with unrestricted `read:archive` is
+  unaffected.

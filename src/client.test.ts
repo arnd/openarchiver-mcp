@@ -99,6 +99,7 @@ describe("OpenArchiverClient.getEmail", () => {
     await assert.rejects(client.getEmail("a/b c"), (err: unknown) => {
       assert.ok(err instanceof OpenArchiverError);
       assert.equal(err.status, 404);
+      assert.match(err.message, /No archived email with this id/);
       return true;
     });
     assert.match(recorded[0].url, /\/api\/v1\/archived-emails\/a%2Fb%20c$/);
@@ -166,6 +167,20 @@ describe("OpenArchiverClient.download", () => {
     assert.equal(result.contentType, "application/pdf");
     assert.equal(result.filename, "report.pdf");
     assert.deepEqual(result.bytes, payload);
+  });
+
+  it("explains a 404 as a possible permission scope, not just a wrong path", async () => {
+    const client = new OpenArchiverClient(
+      "https://host/api/v1",
+      "secret",
+      stubFetch(new Response("nope", { status: 404 })),
+    );
+    await assert.rejects(client.download("open-archiver/x/attachments/y.pdf"), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.equal(err.status, 404);
+      assert.match(err.message, /role does not cover/);
+      return true;
+    });
   });
 
   it("falls back to the last path segment when no header is present", async () => {
