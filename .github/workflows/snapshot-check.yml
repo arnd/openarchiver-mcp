@@ -4,7 +4,12 @@ name: Snapshot check
 # early warning for breaking changes. That pin is a fixed commit, so it goes stale silently
 # (the previous one sat unnoticed for ~5 months, through two releases). This job watches
 # Docker Hub for a newer OSS snapshot, runs the integration test against it, and opens a PR
-# re-pinning the matrix -- with the result of that run in the PR body.
+# re-pinning it -- with the result of that run in the PR body.
+#
+# The pin lives in .github/oa-snapshot.json, NOT in integration.yml: GitHub rejects every
+# GITHUB_TOKEN push that creates or updates a file under .github/workflows/, and there is no
+# `workflows` scope to grant in `permissions:` (that exists only for PATs and GitHub Apps).
+# Keeping it in a data file is what lets this job push its branch at all.
 #
 # Values derived from upstream (tag names, commit subjects) are passed to the shell through
 # env vars, never interpolated into the script with ${{ }}: a commit subject is untrusted
