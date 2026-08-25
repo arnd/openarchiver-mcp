@@ -106,12 +106,14 @@ export function parseContentDispositionFilename(value: string | null): string | 
   return plain ? plain[1] : undefined;
 }
 
-function mapStatusToMessage(status: number, body: string): string {
+const DEFAULT_NOT_FOUND = "Not found (404). The email id or storage path does not exist.";
+
+function mapStatusToMessage(status: number, body: string, notFound = DEFAULT_NOT_FOUND): string {
   if (status === 401 || status === 403) {
     return `Authentication failed (${status}). Check OPENARCHIVER_API_KEY and that it has the required permissions (search:archive, read:archive).`;
   }
   if (status === 404) {
-    return "Not found (404). The email id or storage path does not exist.";
+    return notFound;
   }
   const detail = body.trim().slice(0, 300);
   return `OpenArchiver request failed (${status})${detail ? `: ${detail}` : ""}`;
@@ -145,12 +147,18 @@ export class OpenArchiverClient {
   }
 
   async getEmail(id: string): Promise<EmailDetail> {
-    const res = await this.request(`/archived-emails/${encodeURIComponent(id)}`);
+    const res = await this.request(
+      `/archived-emails/${encodeURIComponent(id)}`,
+      "Not found (404). No archived email with this id.",
+    );
     return (await res.json()) as EmailDetail;
   }
 
   async checkIntegrity(id: string): Promise<IntegrityCheckResult[]> {
-    const res = await this.request(`/integrity/${encodeURIComponent(id)}`);
+    const res = await this.request(
+      `/integrity/${encodeURIComponent(id)}`,
+      "Not found (404). No archived email with this id.",
+    );
     const data = await res.json();
     // The endpoint returns a bare array; anything else means the API changed under us,
     // and a clear error beats a downstream "results.filter is not a function".
@@ -163,7 +171,15 @@ export class OpenArchiverClient {
   }
 
   async download(path: string): Promise<DownloadResult> {
-    const res = await this.request(`/storage/download?path=${encodeURIComponent(path)}`);
+    // Since OpenArchiver 0.6.0 the download endpoint ties the path back to an archived email
+    // the key's role actually covers, and answers 404 (not 403) when it does not -- deliberately,
+    // so a path cannot be probed. Without this hint a scoped key looks like a wrong path.
+    const res = await this.request(
+      `/storage/download?path=${encodeURIComponent(path)}`,
+      "Not found (404). The storage path does not exist, or this API key's role does not cover the " +
+        "email it belongs to (OpenArchiver 0.6.0+ checks the individual record and answers 404 " +
+        "rather than 403). Re-check the storagePath from get_email, and the key's permissions.",
+    );
     const bytes = Buffer.from(await res.arrayBuffer());
     const filename =
       parseContentDispositionFilename(res.headers.get("content-disposition")) ??
@@ -176,7 +192,7 @@ export class OpenArchiverClient {
     };
   }
 
-  private async request(pathAndQuery: string): Promise<Response> {
+  private async request(pathAndQuery: string, notFound?: string): Promise<Response> {
     const url = `${this.apiBase}${pathAndQuery}`;
     let res: Response;
     try {
@@ -189,7 +205,10 @@ export class OpenArchiverClient {
       throw new OpenArchiverError(`Request to OpenArchiver failed: ${reason}`);
     }
     if (!res.ok) {
-      throw new OpenArchiverError(mapStatusToMessage(res.status, await safeText(res)), res.status);
+      throw new OpenArchiverError(
+        mapStatusToMessage(res.status, await safeText(res), notFound),
+        res.status,
+      );
     }
     return res;
   }
