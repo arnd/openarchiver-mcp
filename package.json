@@ -44,8 +44,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "html-to-text": "^10.0.0",
-    "mailparser": "^3.9.15",
+    "html-to-text": "^10.0.1",
+    "mailparser": "^3.9.17",
     "zod": "^4.4.3"
   },
   "devDependencies": {
