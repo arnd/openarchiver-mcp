@@ -1,0 +1,144 @@
+{
+  "author": "Arnd Hannemann",
+  "description": "MCP server for searching an OpenArchiver email archive (search, read emails, fetch attachments).",
+  "homepage": "https://github.com/arnd/openarchiver-mcp#readme",
+  "identifier": "arnd-openarchiver-mcp",
+  "name": "openarchiver-mcp",
+  "prompts": [],
+  "resources": [],
+  "tags": [
+    "mcp",
+    "model-context-protocol",
+    "openarchiver",
+    "email",
+    "archive",
+    "search",
+    "claude"
+  ],
+  "tools": [
+    {
+      "name": "search_archive",
+      "title": "Search the email archive",
+      "description": "Full-text search across archived emails — matches subject, body and extracted attachment text. Returns compact hits, each with an `id`. Use `get_email` with that id to read the full message.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keywords": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Search query, e.g. 'invoice 2026' or a sender name."
+          },
+          "page": {
+            "description": "Page number (default 1).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "description": "Results per page (default 10).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "matchingStrategy": {
+            "description": "Meilisearch strategy: 'last' = at least one keyword (default), 'all' = every keyword, 'frequency' = rank by frequency.",
+            "type": "string",
+            "enum": [
+              "last",
+              "all",
+              "frequency"
+            ]
+          }
+        },
+        "required": [
+          "keywords"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_email",
+      "title": "Read a full archived email",
+      "description": "Fetch a single archived email by id: metadata, full body text, and the list of attachments (each with a `storagePath` you can pass to `get_attachment`).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The archived email id, as returned by search_archive."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "check_integrity",
+      "title": "Verify an archived email's integrity",
+      "description": "Re-compute the SHA-256 hashes of an archived email and each of its attachments and compare them against the hashes stored at archival time. Use this to prove an archived message has not been altered or corrupted in storage. Returns a per-item pass/fail report.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The archived email id (a UUID), as returned by search_archive."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "get_attachment",
+      "title": "Download an attachment",
+      "description": "Download an attachment by its `storagePath` (from get_email). mode 'inline' (default): text files are returned as text, images as image content, other binaries (PDF, Office, …) as base64. mode 'file': write the bytes to a server-managed temp file and return only its path — use this for large binaries to avoid huge base64 in the context. The returned path is only usable when this server runs on the same machine as the client (local stdio); the server chooses the path itself, so callers cannot point it at arbitrary files. Tip: for PDFs, the extracted text is also searchable and shown via search_archive/get_email.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The attachment's storagePath, e.g. 'open-archiver/.../attachments/xyz.pdf'."
+          },
+          "mode": {
+            "description": "'inline' (default) returns content in the response; 'file' saves to a temp file and returns its path.",
+            "type": "string",
+            "enum": [
+              "inline",
+              "file"
+            ]
+          },
+          "maxBytes": {
+            "description": "Max bytes to return inline (default 5000000); ignored for mode 'file'.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "version": "1.3.2"
+}
