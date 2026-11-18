@@ -9,6 +9,7 @@ import {
 interface Recorded {
   url: string;
   headers: Record<string, string>;
+  redirect?: RequestRedirect;
 }
 
 /** Build a fetch stub that records the call and returns a canned response. */
@@ -18,6 +19,7 @@ function stubFetch(response: Response, recorded: Recorded[] = []): typeof fetch 
     recorded.push({
       url: String(input),
       headers: Object.fromEntries(headers.entries()),
+      redirect: init?.redirect,
     });
     return response;
   }) as typeof fetch;
@@ -191,5 +193,26 @@ describe("OpenArchiverClient.download", () => {
     );
     const result = await client.download("a/b/file.bin");
     assert.equal(result.filename, "file.bin");
+  });
+});
+
+describe("OpenArchiverClient redirects", () => {
+  it("never lets fetch follow a redirect", async () => {
+    const recorded: Recorded[] = [];
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(jsonResponse([]), recorded));
+    await client.checkIntegrity("abc");
+    assert.equal(recorded[0].redirect, "manual");
+  });
+
+  it("turns a 3xx into an actionable error naming the target", async () => {
+    const redirect = new Response(null, { status: 301, headers: { location: "https://elsewhere.example/api/v1/search" } });
+    const client = new OpenArchiverClient("http://host/api/v1", "secret", stubFetch(redirect));
+    await assert.rejects(client.search({ keywords: "x" }), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.equal(err.status, 301);
+      assert.match(err.message, /redirect \(301\) to https:\/\/elsewhere\.example/);
+      assert.match(err.message, /OPENARCHIVER_BASE_URL/);
+      return true;
+    });
   });
 });
