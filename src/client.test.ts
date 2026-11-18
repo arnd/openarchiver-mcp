@@ -5,6 +5,7 @@ import {
   OpenArchiverClient,
   OpenArchiverError,
   parseContentDispositionFilename,
+  readBounded,
 } from "./client.js";
 
 interface Recorded {
@@ -237,5 +238,69 @@ describe("encodeEmailId", () => {
     await assert.rejects(client.getEmail(".."), /Invalid email id/);
     await assert.rejects(client.checkIntegrity("."), /Invalid email id/);
     assert.equal(recorded.length, 0);
+  });
+});
+
+/** A body streamed in chunks without a Content-Length header. */
+function streamedResponse(chunks: number, chunkSize: number, init?: ResponseInit): Response {
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent++ < chunks) controller.enqueue(new Uint8Array(chunkSize).fill(0x61));
+      else controller.close();
+    },
+  });
+  return new Response(stream, init);
+}
+
+describe("readBounded", () => {
+  it("returns a body within the limit", async () => {
+    const bytes = await readBounded(streamedResponse(3, 10), 30);
+    assert.equal(bytes.length, 30);
+  });
+
+  it("rejects up front when Content-Length exceeds the limit", async () => {
+    const res = new Response("x".repeat(100), { headers: { "content-length": "100" } });
+    await assert.rejects(readBounded(res, 50), /exceeds the 50-byte limit/);
+  });
+
+  it("aborts a streamed body without Content-Length once it passes the limit", async () => {
+    await assert.rejects(readBounded(streamedResponse(1000, 1024), 4096), /exceeds the 4096-byte limit/);
+  });
+});
+
+describe("OpenArchiverClient response size limit", () => {
+  it("applies the configured limit to JSON responses", async () => {
+    const big = jsonResponse({ hits: [], filler: "x".repeat(2000) });
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(big), 30_000, 1000);
+    await assert.rejects(client.search({ keywords: "x" }), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.match(err.message, /OPENARCHIVER_MAX_RESPONSE_BYTES/);
+      return true;
+    });
+  });
+
+  it("applies the configured limit to downloads", async () => {
+    const res = streamedResponse(10, 1024, { headers: { "content-type": "application/pdf" } });
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(res), 30_000, 5000);
+    await assert.rejects(client.download("a/b.pdf"), /exceeds the 5000-byte limit/);
+  });
+
+  it("reports invalid JSON as an OpenArchiverError", async () => {
+    const res = new Response("<html>proxy error</html>", { status: 200 });
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(res));
+    await assert.rejects(client.getEmail("abc"), /not valid JSON/);
+  });
+
+  it("keeps only a bounded error body for the message", async () => {
+    const res = streamedResponse(10_000, 1024, { status: 500 });
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(res));
+    await assert.rejects(client.search({ keywords: "x" }), (err: unknown) => {
+      assert.ok(err instanceof OpenArchiverError);
+      assert.equal(err.status, 500);
+      // body exceeds the error-body cap, so it is dropped rather than buffered
+      assert.equal(err.message, "OpenArchiver request failed (500)");
+      return true;
+    });
   });
 });

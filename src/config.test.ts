@@ -34,7 +34,22 @@ describe("loadConfig", () => {
       apiBase: "https://host.example.com/api/v1",
       apiKey: "secret",
       timeoutMs: 30_000,
+      maxResponseBytes: 256 * 1024 * 1024,
     });
+  });
+
+  it("honours a custom response size limit and ignores invalid values", () => {
+    const base = { OPENARCHIVER_BASE_URL: "https://host", OPENARCHIVER_API_KEY: "secret" };
+    assert.equal(
+      loadConfig({ ...base, OPENARCHIVER_MAX_RESPONSE_BYTES: "1048576" } as NodeJS.ProcessEnv).maxResponseBytes,
+      1_048_576,
+    );
+    for (const bad of ["0", "-5", "abc", ""]) {
+      assert.equal(
+        loadConfig({ ...base, OPENARCHIVER_MAX_RESPONSE_BYTES: bad } as NodeJS.ProcessEnv).maxResponseBytes,
+        256 * 1024 * 1024,
+      );
+    }
   });
 
   it("honours a custom timeout", () => {

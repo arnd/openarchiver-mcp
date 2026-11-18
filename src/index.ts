@@ -42,6 +42,8 @@ Environment:
                                     (the /api/v1 suffix is added automatically)
   OPENARCHIVER_API_KEY    required  API key with the search:archive and read:archive permissions
   OPENARCHIVER_TIMEOUT_MS optional  request timeout in ms (default 30000)
+  OPENARCHIVER_MAX_RESPONSE_BYTES
+                          optional  max size of one API response in bytes (default 268435456 = 256 MiB)
 
 Tools: search_archive, get_email, check_integrity, get_attachment (all read-only).
 Docs: https://github.com/arnd/openarchiver-mcp`;
@@ -87,7 +89,13 @@ async function main(): Promise<void> {
   const getClient = (): OpenArchiverClient => {
     if (!client) {
       const config = loadConfig();
-      client = new OpenArchiverClient(config.apiBase, config.apiKey, fetch, config.timeoutMs);
+      client = new OpenArchiverClient(
+        config.apiBase,
+        config.apiKey,
+        fetch,
+        config.timeoutMs,
+        config.maxResponseBytes,
+      );
     }
     return client;
   };
@@ -103,7 +111,8 @@ async function main(): Promise<void> {
         "OPENARCHIVER_BASE_URL (your OpenArchiver instance URL, e.g. https://openarchiver.example.com — " +
         "the /api/v1 suffix is added automatically) and OPENARCHIVER_API_KEY (an API key with the " +
         "'search:archive' and 'read:archive' permissions). Optional: OPENARCHIVER_TIMEOUT_MS " +
-        "(request timeout in ms, default 30000). Typical workflow: search_archive to find emails " +
+        "(request timeout in ms, default 30000) and OPENARCHIVER_MAX_RESPONSE_BYTES (max size of one " +
+        "API response, default 256 MiB). Typical workflow: search_archive to find emails " +
         "(returns ids) → get_email to read one by id (lists attachments with a storagePath) → " +
         "get_attachment to download an attachment. check_integrity re-verifies an archived email's " +
         "SHA-256 hashes on demand. An authentication error or a '… is not set' error " +
