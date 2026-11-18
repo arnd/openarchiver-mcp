@@ -111,8 +111,19 @@ export interface EmailDetail {
   hasAttachments?: boolean;
   storagePath?: string;
   attachments?: EmailAttachment[];
+  /** All emails of this email's thread (including itself), oldest first. */
+  thread?: ThreadEmail[] | null;
   /** Raw RFC822 message, serialized as a Node Buffer (`{ type: "Buffer", data: number[] }`). */
   raw?: { type: "Buffer"; data: number[] } | null;
+}
+
+/** One thread member as embedded in `GET /archived-emails/{id}` (metadata only, no body). */
+export interface ThreadEmail {
+  id: string;
+  subject?: string | null;
+  sentAt?: string | null;
+  senderName?: string | null;
+  senderEmail?: string | null;
 }
 
 /** One line of a `/integrity/{id}` verification report: the email itself or one attachment. */

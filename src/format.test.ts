@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { EmailDetail, IntegrityCheckResult, SearchResponse } from "./client.js";
 import {
+  baseSubject,
   describeSearchFilters,
   classifyAttachment,
   formatBytes,
   formatEmail,
   formatIntegrityResults,
   formatSearchResults,
+  formatThread,
   safeAttachmentFilename,
   snippet,
   stripHtml,
@@ -234,5 +236,83 @@ describe("describeSearchFilters", () => {
       }),
       "from *@telekom.de | a@b.c; date 2025-01-01 – …; with attachments; sorted date_asc",
     );
+  });
+});
+
+describe("baseSubject", () => {
+  it("strips stacked reply/forward prefixes in English and German", () => {
+    assert.equal(baseSubject("Re: AW: Fwd:  Angebot   Dach"), "angebot dach");
+    assert.equal(baseSubject("RE[2]: Angebot Dach"), "angebot dach");
+    assert.equal(baseSubject("WG: Angebot Dach"), "angebot dach");
+    assert.equal(baseSubject("Reminder: Angebot"), "reminder: angebot");
+  });
+});
+
+describe("formatThread", () => {
+  const member = (n: number, subject = "Angebot Dach", name = `Sender ${n}`) => ({
+    id: `id-${n}`,
+    subject: n === 1 ? subject : `Re: ${subject}`,
+    sentAt: new Date(Date.UTC(2026, 2, n, 9, 30)).toISOString(),
+    senderName: name,
+    senderEmail: `s${n}@example.com`,
+  });
+
+  it("returns nothing for a missing or single-message thread", () => {
+    assert.equal(formatThread(undefined, "id-1", "x"), "");
+    assert.equal(formatThread(null, "id-1", "x"), "");
+    assert.equal(formatThread([member(1)], "id-1", "Angebot Dach"), "");
+  });
+
+  it("lists every member, marks the open email and elides Re:-only subjects", () => {
+    const out = formatThread([member(1), member(2), member(3)], "id-2", "Re: Angebot Dach");
+    assert.equal(
+      out,
+      [
+        "Thread (3 messages, oldest first; open one with get_email):",
+        "  1. 2026-03-01 09:30  Sender 1  id: id-1",
+        "→ 2. 2026-03-02 09:30  Sender 2  id: id-2  (this email)",
+        "  3. 2026-03-03 09:30  Sender 3  id: id-3",
+      ].join("\n"),
+    );
+  });
+
+  it("shows the subject only where it really differs", () => {
+    const changed = { ...member(2), subject: "Neues Thema" };
+    const out = formatThread([member(1), changed], "id-1", "Angebot Dach");
+    assert.match(out, /2\. 2026-03-02 09:30 {2}Sender 2 {2}"Neues Thema" {2}id: id-2$/m);
+    assert.doesNotMatch(out, /Angebot Dach/);
+  });
+
+  it("falls back to the address when there is no sender name", () => {
+    const anon = { ...member(2), senderName: null };
+    assert.match(formatThread([member(1), anon], "id-1", "Angebot Dach"), /s2@example\.com {2}id: id-2/);
+  });
+
+  it("sorts by date even if the API order is off", () => {
+    const out = formatThread([member(3), member(1), member(2)], "id-1", "Angebot Dach");
+    assert.ok(out.indexOf("id-1") < out.indexOf("id-2") && out.indexOf("id-2") < out.indexOf("id-3"));
+  });
+
+  it("windows a long thread around the open email and counts the rest", () => {
+    const thread = Array.from({ length: 28 }, (_, i) => member(i + 1));
+    const out = formatThread(thread, "id-15", "Angebot Dach");
+    const lines = out.split("\n");
+    assert.equal(lines[0], "Thread (28 messages, oldest first; open one with get_email):");
+    assert.equal(lines[1], "    … 4 earlier, oldest 2026-03-01");
+    assert.match(lines[2], /^ {2}5\. /);
+    assert.match(out, /^→ 15\. .*\(this email\)$/m);
+    assert.match(lines[21], /^ {2}24\. /);
+    assert.equal(lines[22], "    … 4 later, newest 2026-03-28");
+    assert.equal(lines.length, 23);
+  });
+
+  it("keeps the window inside the thread at either end", () => {
+    const thread = Array.from({ length: 28 }, (_, i) => member(i + 1));
+    const first = formatThread(thread, "id-1", "Angebot Dach").split("\n");
+    assert.match(first[1], /^→ 1\. /);
+    assert.equal(first.at(-1), "    … 8 later, newest 2026-03-28");
+    const last = formatThread(thread, "id-28", "Angebot Dach").split("\n");
+    assert.equal(last[1], "    … 8 earlier, oldest 2026-03-01");
+    assert.match(last.at(-1)!, /^→ 28\. /);
   });
 });

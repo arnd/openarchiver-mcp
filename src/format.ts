@@ -1,6 +1,12 @@
 import { convert as htmlToText } from "html-to-text";
 
-import type { EmailDetail, IntegrityCheckResult, SearchParams, SearchResponse } from "./client.js";
+import type {
+  EmailDetail,
+  IntegrityCheckResult,
+  SearchParams,
+  SearchResponse,
+  ThreadEmail,
+} from "./client.js";
 
 /** Format an epoch-millis number or ISO string as an ISO timestamp; fall back to the raw value. */
 export function formatDate(value: string | number | undefined | null): string {
@@ -116,7 +122,68 @@ export function formatEmail(detail: EmailDetail, body: string): string {
     lines.push("", "Attachments: none");
   }
 
+  const thread = formatThread(detail.thread, detail.id, detail.subject);
+  if (thread) lines.push("", thread);
+
   lines.push("", "--- Body ---", body.trim() || "(no text body)");
+  return lines.join("\n");
+}
+
+/** Max thread members listed in get_email; longer threads show a window around the open email. */
+export const THREAD_MAX_ENTRIES = 20;
+
+const REPLY_PREFIX = /^\s*((re|aw|antw|fw|fwd|wg|sv|vs|tr)(\s*\[\d+\])?\s*:\s*)+/i;
+
+/** Subject without reply/forward prefixes, whitespace-collapsed and lower-cased, for comparison. */
+export function baseSubject(subject: string | null | undefined): string {
+  return (subject ?? "").replace(REPLY_PREFIX, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function shortDate(value: string | null | undefined): string {
+  if (!value) return "????-??-?? ??:??";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 16).replace("T", " ");
+}
+
+/**
+ * Compact thread overview for get_email: one line per member (date, sender, id), oldest first,
+ * with the open email marked. References only -- bodies are one get_email call away, and fetching
+ * them all would download every member's raw .eml. To keep the context cost small, the subject is
+ * shown only where it differs from the open email's beyond Re:/AW:/Fwd: prefixes, and threads
+ * longer than THREAD_MAX_ENTRIES show a window around the open email plus a count of the rest.
+ * Returns "" for a single-message thread or when the API sent no thread.
+ */
+export function formatThread(
+  thread: ThreadEmail[] | null | undefined,
+  currentId: string,
+  currentSubject?: string,
+): string {
+  if (!Array.isArray(thread) || thread.length <= 1) return "";
+  const members = [...thread].sort((a, b) => (a.sentAt ?? "").localeCompare(b.sentAt ?? ""));
+  const total = members.length;
+  const current = Math.max(0, members.findIndex((m) => m.id === currentId));
+  const start =
+    total <= THREAD_MAX_ENTRIES
+      ? 0
+      : Math.min(Math.max(0, current - Math.floor(THREAD_MAX_ENTRIES / 2)), total - THREAD_MAX_ENTRIES);
+  const end = Math.min(total, start + THREAD_MAX_ENTRIES);
+  const base = baseSubject(currentSubject);
+
+  const lines = [`Thread (${total} messages, oldest first; open one with get_email):`];
+  if (start > 0) {
+    lines.push(`    … ${start} earlier, oldest ${shortDate(members[0].sentAt).slice(0, 10)}`);
+  }
+  for (let i = start; i < end; i++) {
+    const m = members[i];
+    const marker = i === current ? "→" : " ";
+    const sender = m.senderName?.trim() || m.senderEmail?.trim() || "?";
+    const subject = baseSubject(m.subject) === base ? "" : `  "${m.subject?.trim() || "(no subject)"}"`;
+    const self = i === current ? "  (this email)" : "";
+    lines.push(`${marker} ${i + 1}. ${shortDate(m.sentAt)}  ${sender}${subject}  id: ${m.id}${self}`);
+  }
+  if (end < total) {
+    lines.push(`    … ${total - end} later, newest ${shortDate(members[total - 1].sentAt).slice(0, 10)}`);
+  }
   return lines.join("\n");
 }
 

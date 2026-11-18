@@ -40,6 +40,8 @@ const API = `${BASE_URL}/api/v1`;
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "integration-test-password";
 const NEEDLE = "MCPINTEGRATIONNEEDLE";
+// Emails in test/integration/fixtures/test.mbox carrying NEEDLE (incl. the reply's subject).
+const FIXTURE_NEEDLE_EMAILS = 3;
 const MBOX_PATH = "/fixtures/test.mbox"; // path inside the open-archiver container
 const READY_TIMEOUT_MS = 180_000;
 const INDEX_TIMEOUT_MS = 180_000;
@@ -140,7 +142,8 @@ async function bootstrap() {
     });
     if (!res.ok) return undefined;
     const data = await res.json();
-    if ((data.total ?? 0) > 0 && (data.hits?.length ?? 0) > 0) return true;
+    // Wait for the whole fixture, not just the first hit, so no assertion races the indexer.
+    if ((data.total ?? 0) >= FIXTURE_NEEDLE_EMAILS) return true;
     return undefined;
   });
 
@@ -176,7 +179,8 @@ async function runMcpAssertions(apiKey) {
     console.log(`  search_archive ok (found id ${id})`);
 
     // 1b. Structured filters (OpenArchiver 0.5.2+). The fixture holds two needle mails from
-    //     alice@example.com to bob@example.com on 2026-06-01; only the second has an attachment.
+    //     alice@example.com to bob@example.com on 2026-06-01 (only the second has an attachment)
+    //     and Bob's reply from bob@example.net, which has NEEDLE only in its "Re:" subject.
     //     Each filter is checked in a narrowing and an excluding direction, so a server that
     //     silently ignored the parameter would fail the check.
     const hitCount = (out) => [...out.matchAll(/^\s*id:\s*\S+/gm)].length;
@@ -198,13 +202,27 @@ async function runMcpAssertions(apiKey) {
     assert.match(withAttachment, /message with attachment/);
 
     const inRange = await searchWith({ keywords: NEEDLE, dateFrom: "2026-06-01", dateTo: "2026-06-01" });
-    assert.equal(hitCount(inRange), 2, `date range covering the fixture:\n${inRange}`);
+    assert.equal(hitCount(inRange), FIXTURE_NEEDLE_EMAILS, `date range covering the fixture:\n${inRange}`);
     const afterRange = await searchWith({ keywords: NEEDLE, dateFrom: "2026-06-02" });
     assert.equal(hitCount(afterRange), 0, `dateFrom after the fixture:\n${afterRange}`);
 
     const toBob = await searchWith({ keywords: NEEDLE, to: ["bob@*"], notFrom: ["alice@example.com"] });
     assert.equal(hitCount(toBob), 0, `notFrom did not exclude the sender:\n${toBob}`);
     console.log("  search_archive filters ok (from, notFrom, to, dates, hasAttachments, sort)");
+
+    // 1c. get_email lists the thread: Bob's reply (In-Reply-To the first mail) shares its thread.
+    //     References only, the open email marked, and the subject elided where it is just "Re:".
+    const replySearch = await searchWith({ keywords: "THREADREPLYNEEDLE" });
+    const replyId = replySearch.match(/^\s*id:\s*(\S+)/m)?.[1];
+    assert.ok(replyId, `could not find the reply email:\n${replySearch}`);
+    const reply = toolText(await client.callTool({ name: "get_email", arguments: { id: replyId } }));
+    assert.match(reply, /^Thread \(2 messages/m, `get_email did not list the thread:\n${reply}`);
+    assert.match(reply, /^\s+1\. 2026-06-01 09:00 {2}Alice Example {2}id: \S+$/m, `first thread member:\n${reply}`);
+    assert.match(reply, new RegExp(`^→ 2\\. 2026-06-01 11:15 {2}Bob Example {2}id: ${replyId} {2}\\(this email\\)$`, "m"));
+    const withAttachmentId = withAttachment.match(/^\s*id:\s*(\S+)/m)?.[1];
+    const single = toolText(await client.callTool({ name: "get_email", arguments: { id: withAttachmentId } }));
+    assert.doesNotMatch(single, /^Thread \(/m, `single-message thread should show no block:\n${single}`);
+    console.log("  get_email thread ok (2-message thread listed, single message without block)");
 
     // 2. get_email returns metadata + body for that id.
     const email = toolText(await client.callTool({ name: "get_email", arguments: { id } }));
