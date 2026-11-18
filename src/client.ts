@@ -197,12 +197,26 @@ export class OpenArchiverClient {
     let res: Response;
     try {
       res = await this.fetchImpl(url, {
+        // Never follow redirects: fetch strips only `Authorization` on a cross-origin hop,
+        // so a redirect (misconfigured proxy, compromised server) would forward X-API-KEY
+        // to whatever host it points at.
+        redirect: "manual",
         headers: { "X-API-KEY": this.apiKey },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       throw new OpenArchiverError(`Request to OpenArchiver failed: ${reason}`);
+    }
+    if (res.status >= 300 && res.status < 400) {
+      await res.body?.cancel().catch(() => {});
+      const location = res.headers.get("location");
+      throw new OpenArchiverError(
+        `OpenArchiver answered with a redirect (${res.status})${location ? ` to ${location}` : ""}. ` +
+          "Redirects are not followed, so the API key is never sent to another URL. " +
+          "Set OPENARCHIVER_BASE_URL to the final address of your instance (e.g. https:// instead of http://).",
+        res.status,
+      );
     }
     if (!res.ok) {
       throw new OpenArchiverError(
