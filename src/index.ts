@@ -12,6 +12,7 @@ import { OpenArchiverClient, OpenArchiverError } from "./client.js";
 import { loadConfig } from "./config.js";
 import {
   classifyAttachment,
+  describeSearchFilters,
   formatEmail,
   formatIntegrityResults,
   formatSearchResults,
@@ -120,15 +121,61 @@ async function main(): Promise<void> {
     },
   );
 
+  const address = z
+    .string()
+    .min(1)
+    .regex(/^[^,\s]+$/, "one address or pattern per entry, without commas or spaces");
+  const addressList = (what: string) =>
+    z
+      .array(address)
+      .min(1)
+      .max(20)
+      .optional()
+      .describe(
+        `${what} Several values are OR-combined. Each entry is an exact address or a pattern: ` +
+          "'*@example.com' (anyone at that domain) or 'alice@*' (that name at any domain).",
+      );
+  const day = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "use yyyy-mm-dd");
+
   server.registerTool(
     "search_archive",
     {
       title: "Search the email archive",
       description:
-        "Full-text search across archived emails — matches subject, body and extracted attachment text. " +
-        "Returns compact hits, each with an `id`. Use `get_email` with that id to read the full message.",
+        "Search archived emails — full text over subject, body and extracted attachment text, " +
+        "optionally narrowed by structured filters (sender, recipient, mailbox, date range, attachments). " +
+        "Filters are AND-combined with each other and with the keywords; keywords may be omitted when a " +
+        "filter is set, to browse e.g. all mail from one sender in a date range. Prefer filters over " +
+        "putting addresses or dates into keywords. Returns compact hits, each with an `id`; use " +
+        "`get_email` with that id to read the full message. Filters, searchIn and sort need " +
+        "OpenArchiver 0.5.2+ (older versions ignore them).",
       inputSchema: {
-        keywords: z.string().min(1).describe("Search query, e.g. 'invoice 2026' or a sender name."),
+        keywords: z
+          .string()
+          .optional()
+          .describe("Search query, e.g. 'invoice' or 'contract renewal'. Optional when a filter is set."),
+        from: addressList("Only emails from these senders."),
+        notFrom: addressList("Exclude emails from these senders."),
+        to: addressList("Only emails to these recipients (matches To, Cc or Bcc)."),
+        notTo: addressList("Exclude emails to these recipients (To, Cc and Bcc)."),
+        mailboxes: addressList("Only emails archived from these mailbox accounts."),
+        dateFrom: day.optional().describe("Sent on or after this day (UTC, yyyy-mm-dd, inclusive)."),
+        dateTo: day.optional().describe("Sent on or before this day (UTC, yyyy-mm-dd, inclusive)."),
+        hasAttachments: z
+          .boolean()
+          .optional()
+          .describe("true = only emails with attachments, false = only emails without."),
+        searchIn: z
+          .array(z.enum(["subject", "body", "attachment_name", "attachment_content", "from", "to"]))
+          .min(1)
+          .optional()
+          .describe("Restrict which parts the keywords are matched against (default: everywhere)."),
+        sort: z
+          .enum(["date_desc", "date_asc", "relevance"])
+          .optional()
+          .describe("Result order: 'date_desc' newest first (server default), 'date_asc' oldest first, 'relevance' best match first."),
         page: z.number().int().min(1).optional().describe("Page number (default 1)."),
         limit: z.number().int().min(1).max(50).optional().describe("Results per page (default 10)."),
         matchingStrategy: z
@@ -141,8 +188,12 @@ async function main(): Promise<void> {
     },
     async (args) => {
       try {
+        if (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) {
+          return errorResult(new OpenArchiverError("dateFrom must not be after dateTo."));
+        }
         const data = await getClient().search(args);
-        return text(formatSearchResults(data));
+        const filters = describeSearchFilters(args);
+        return text((filters ? `Filters: ${filters}\n` : "") + formatSearchResults(data));
       } catch (err) {
         return errorResult(err);
       }
