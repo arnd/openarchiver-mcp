@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  encodeEmailId,
   OpenArchiverClient,
   OpenArchiverError,
   parseContentDispositionFilename,
@@ -214,5 +215,27 @@ describe("OpenArchiverClient redirects", () => {
       assert.match(err.message, /OPENARCHIVER_BASE_URL/);
       return true;
     });
+  });
+});
+
+describe("encodeEmailId", () => {
+  it("encodes a normal id as a single path segment", () => {
+    assert.equal(encodeEmailId("0b6c1d2e-aaaa-4bbb-8ccc-123456789abc"), "0b6c1d2e-aaaa-4bbb-8ccc-123456789abc");
+    assert.equal(encodeEmailId("a/../b"), "a%2F..%2Fb");
+    assert.equal(encodeEmailId("%2e%2e"), "%252e%252e");
+  });
+
+  for (const bad of ["", "   ", ".", "..", "abc\n", "a\u0000b"]) {
+    it(`rejects ${JSON.stringify(bad)}`, () => {
+      assert.throws(() => encodeEmailId(bad), OpenArchiverError);
+    });
+  }
+
+  it("rejects a dot-segment id before any request is sent", async () => {
+    const recorded: Recorded[] = [];
+    const client = new OpenArchiverClient("https://host/api/v1", "secret", stubFetch(jsonResponse({}), recorded));
+    await assert.rejects(client.getEmail(".."), /Invalid email id/);
+    await assert.rejects(client.checkIntegrity("."), /Invalid email id/);
+    assert.equal(recorded.length, 0);
   });
 });

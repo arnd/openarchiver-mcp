@@ -127,6 +127,19 @@ async function safeText(res: Response): Promise<string> {
   }
 }
 
+/**
+ * Encode an email id as one path segment. `encodeURIComponent` already escapes `/`, `%` and
+ * `?`, but leaves `.` and `..` alone -- and URL parsing resolves those as dot segments, so
+ * `/archived-emails/..` would silently hit `/api/v1/` instead of an email. Control characters
+ * are never part of a real id and are rejected too.
+ */
+export function encodeEmailId(id: string): string {
+  if (!id.trim() || id === "." || id === ".." || /[\u0000-\u001f\u007f]/.test(id)) {
+    throw new OpenArchiverError(`Invalid email id ${JSON.stringify(id)}. Use an id returned by search_archive.`);
+  }
+  return encodeURIComponent(id);
+}
+
 /** Thin client over the OpenArchiver REST API. `fetch` is injectable for testing. */
 export class OpenArchiverClient {
   constructor(
@@ -148,7 +161,7 @@ export class OpenArchiverClient {
 
   async getEmail(id: string): Promise<EmailDetail> {
     const res = await this.request(
-      `/archived-emails/${encodeURIComponent(id)}`,
+      `/archived-emails/${encodeEmailId(id)}`,
       "Not found (404). No archived email with this id.",
     );
     return (await res.json()) as EmailDetail;
@@ -156,7 +169,7 @@ export class OpenArchiverClient {
 
   async checkIntegrity(id: string): Promise<IntegrityCheckResult[]> {
     const res = await this.request(
-      `/integrity/${encodeURIComponent(id)}`,
+      `/integrity/${encodeEmailId(id)}`,
       "Not found (404). No archived email with this id.",
     );
     const data = await res.json();
