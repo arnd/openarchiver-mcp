@@ -10,6 +10,7 @@
 // ADMIN_EMAIL/ADMIN_PASSWORD auto-create the admin via GET /api/v1/auth/status.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -18,13 +19,17 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const COMPOSE_FILE = join(repoRoot, "test/integration/docker-compose.test.yml");
 
-// Which OpenArchiver image to test against. Default v0.6.0; override via the
+// Which OpenArchiver image to test against. Default: the newest release in
+// .github/oa-snapshot.json (the same list the CI matrix uses); override via the
 // OA_IMAGE_TAG env var or the first CLI arg, e.g.
 //   OA_IMAGE_TAG=v0.5.2 npm run test:integration
 //   npm run test:integration -- v0.5.2
-// Only OSS semver tags (v0.1.1 … v0.6.0) are freely pullable; v1.x exist only as
+// Only OSS semver tags (v0.1.1 … v0.6.x) are freely pullable; v1.x exist only as
 // `-enterprise` images (license required), e.g. OA_IMAGE_TAG=v1.4.2-enterprise.
-const OA_IMAGE_TAG = process.env.OA_IMAGE_TAG || process.argv[2] || "v0.6.0";
+const OA_IMAGE_TAG =
+  process.env.OA_IMAGE_TAG ||
+  process.argv[2] ||
+  JSON.parse(readFileSync(join(repoRoot, ".github/oa-snapshot.json"), "utf8")).releases[0];
 // Per-tag compose project keeps containers/volumes isolated between versions.
 const PROJECT = `oa-int-${OA_IMAGE_TAG.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
 const COMPOSE = ["compose", "-p", PROJECT, "-f", COMPOSE_FILE];

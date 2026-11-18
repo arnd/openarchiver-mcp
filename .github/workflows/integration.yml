@@ -30,7 +30,7 @@ jobs:
   # The versions live in .github/oa-snapshot.json rather than in this file, because a
   # matrix cannot read a file and the `Snapshot check` bot cannot write one: GitHub
   # rejects every GITHUB_TOKEN push that touches .github/workflows/**. This job turns
-  # that data file into the matrix. Only OSS semver tags (v0.1.1 … v0.5.2) are freely
+  # that data file into the matrix. Only OSS semver tags (v0.1.1 … v0.6.x) are freely
   # pullable; v1.x are `-enterprise` only.
   versions:
     runs-on: ubuntu-latest
