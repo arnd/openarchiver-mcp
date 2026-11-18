@@ -119,9 +119,50 @@ function mapStatusToMessage(status: number, body: string, notFound = DEFAULT_NOT
   return `OpenArchiver request failed (${status})${detail ? `: ${detail}` : ""}`;
 }
 
+/** Default cap for one response body. `get_email` embeds the raw .eml as a JSON number array
+ * (~4 bytes per message byte), so this must comfortably fit large mails, not just metadata. */
+export const DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024 * 1024;
+const ERROR_BODY_MAX_BYTES = 64 * 1024;
+
+/**
+ * Read a response body, but never more than `maxBytes`: a broken or hostile server (or a
+ * proxy error page) must not be able to make the process buffer an unbounded body. Checks the
+ * declared Content-Length up front and the actual (decoded) size while streaming.
+ */
+export async function readBounded(res: Response, maxBytes: number): Promise<Buffer> {
+  const tooLarge = () =>
+    new OpenArchiverError(
+      `OpenArchiver response exceeds the ${maxBytes}-byte limit (OPENARCHIVER_MAX_RESPONSE_BYTES).`,
+    );
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await res.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw tooLarge();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, size);
+}
+
 async function safeText(res: Response): Promise<string> {
   try {
-    return await res.text();
+    return (await readBounded(res, ERROR_BODY_MAX_BYTES)).toString("utf8");
   } catch {
     return "";
   }
@@ -147,7 +188,17 @@ export class OpenArchiverClient {
     private readonly apiKey: string,
     private readonly fetchImpl: FetchLike = fetch,
     private readonly timeoutMs = 30_000,
+    private readonly maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
   ) {}
+
+  private async json(res: Response): Promise<unknown> {
+    const text = (await readBounded(res, this.maxResponseBytes)).toString("utf8");
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new OpenArchiverError("OpenArchiver returned a response that is not valid JSON.");
+    }
+  }
 
   async search(params: SearchParams): Promise<SearchResponse> {
     const query = new URLSearchParams();
@@ -156,7 +207,7 @@ export class OpenArchiverClient {
     if (params.limit != null) query.set("limit", String(params.limit));
     if (params.matchingStrategy) query.set("matchingStrategy", params.matchingStrategy);
     const res = await this.request(`/search?${query.toString()}`);
-    return (await res.json()) as SearchResponse;
+    return (await this.json(res)) as SearchResponse;
   }
 
   async getEmail(id: string): Promise<EmailDetail> {
@@ -164,7 +215,7 @@ export class OpenArchiverClient {
       `/archived-emails/${encodeEmailId(id)}`,
       "Not found (404). No archived email with this id.",
     );
-    return (await res.json()) as EmailDetail;
+    return (await this.json(res)) as EmailDetail;
   }
 
   async checkIntegrity(id: string): Promise<IntegrityCheckResult[]> {
@@ -172,7 +223,7 @@ export class OpenArchiverClient {
       `/integrity/${encodeEmailId(id)}`,
       "Not found (404). No archived email with this id.",
     );
-    const data = await res.json();
+    const data = await this.json(res);
     // The endpoint returns a bare array; anything else means the API changed under us,
     // and a clear error beats a downstream "results.filter is not a function".
     if (!Array.isArray(data)) {
@@ -193,7 +244,7 @@ export class OpenArchiverClient {
         "email it belongs to (OpenArchiver 0.6.0+ checks the individual record and answers 404 " +
         "rather than 403). Re-check the storagePath from get_email, and the key's permissions.",
     );
-    const bytes = Buffer.from(await res.arrayBuffer());
+    const bytes = await readBounded(res, this.maxResponseBytes);
     const filename =
       parseContentDispositionFilename(res.headers.get("content-disposition")) ??
       path.split("/").pop() ??

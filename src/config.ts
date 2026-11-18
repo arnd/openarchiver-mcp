@@ -1,9 +1,13 @@
+import { DEFAULT_MAX_RESPONSE_BYTES } from "./client.js";
+
 export interface OpenArchiverConfig {
   /** Effective API base, e.g. https://host/api/v1 (no trailing slash). */
   apiBase: string;
   apiKey: string;
   /** Request timeout in milliseconds. */
   timeoutMs: number;
+  /** Upper bound for one response body in bytes. */
+  maxResponseBytes: number;
 }
 
 /**
@@ -39,10 +43,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): OpenArchiverCo
   }
 
   const timeoutMs = Number.parseInt(env.OPENARCHIVER_TIMEOUT_MS ?? "", 10);
+  const maxResponseBytes = Number.parseInt(env.OPENARCHIVER_MAX_RESPONSE_BYTES ?? "", 10);
 
   return {
     apiBase: normalizeApiBase(baseUrl),
     apiKey,
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30_000,
+    maxResponseBytes:
+      Number.isSafeInteger(maxResponseBytes) && maxResponseBytes > 0
+        ? maxResponseBytes
+        : DEFAULT_MAX_RESPONSE_BYTES,
   };
 }

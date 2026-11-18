@@ -111,6 +111,7 @@ The server reads two environment variables:
 | `OPENARCHIVER_BASE_URL` | yes | `https://openarchiver.example.com` (the `/api/v1` suffix is added automatically) |
 | `OPENARCHIVER_API_KEY` | yes | your API key |
 | `OPENARCHIVER_TIMEOUT_MS` | no | request timeout, default `30000` |
+| `OPENARCHIVER_MAX_RESPONSE_BYTES` | no | max size of one API response in bytes, default `268435456` (256 MiB); larger responses — including attachments — are aborted with an error |
 
 For local runs you can keep these in a `.env` file (see `.env.example`) and start the server with
 Node's built-in env-file support — no extra dependency required:
