@@ -175,6 +175,37 @@ async function runMcpAssertions(apiKey) {
     assert.ok(id, `could not extract an email id from search_archive output:\n${search}`);
     console.log(`  search_archive ok (found id ${id})`);
 
+    // 1b. Structured filters (OpenArchiver 0.5.2+). The fixture holds two needle mails from
+    //     alice@example.com to bob@example.com on 2026-06-01; only the second has an attachment.
+    //     Each filter is checked in a narrowing and an excluding direction, so a server that
+    //     silently ignored the parameter would fail the check.
+    const hitCount = (out) => [...out.matchAll(/^\s*id:\s*\S+/gm)].length;
+    const searchWith = async (args) =>
+      toolText(await client.callTool({ name: "search_archive", arguments: args }));
+
+    const bySender = await searchWith({ from: ["*@example.com"], sort: "date_asc" });
+    assert.equal(hitCount(bySender), 2, `filter-only search by sender domain:\n${bySender}`);
+    assert.match(bySender, /^Filters: from \*@example\.com; sorted date_asc/m);
+    assert.ok(
+      bySender.indexOf("first archived message") < bySender.indexOf("message with attachment"),
+      `sort date_asc did not put the older mail first:\n${bySender}`,
+    );
+    const otherSender = await searchWith({ keywords: NEEDLE, from: ["nobody@nowhere.invalid"] });
+    assert.equal(hitCount(otherSender), 0, `from filter was not applied:\n${otherSender}`);
+
+    const withAttachment = await searchWith({ keywords: NEEDLE, hasAttachments: true });
+    assert.equal(hitCount(withAttachment), 1, `hasAttachments=true:\n${withAttachment}`);
+    assert.match(withAttachment, /message with attachment/);
+
+    const inRange = await searchWith({ keywords: NEEDLE, dateFrom: "2026-06-01", dateTo: "2026-06-01" });
+    assert.equal(hitCount(inRange), 2, `date range covering the fixture:\n${inRange}`);
+    const afterRange = await searchWith({ keywords: NEEDLE, dateFrom: "2026-06-02" });
+    assert.equal(hitCount(afterRange), 0, `dateFrom after the fixture:\n${afterRange}`);
+
+    const toBob = await searchWith({ keywords: NEEDLE, to: ["bob@*"], notFrom: ["alice@example.com"] });
+    assert.equal(hitCount(toBob), 0, `notFrom did not exclude the sender:\n${toBob}`);
+    console.log("  search_archive filters ok (from, notFrom, to, dates, hasAttachments, sort)");
+
     // 2. get_email returns metadata + body for that id.
     const email = toolText(await client.callTool({ name: "get_email", arguments: { id } }));
     assert.match(email, new RegExp(NEEDLE), "get_email output did not contain the needle");

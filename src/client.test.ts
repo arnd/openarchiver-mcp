@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildSearchQuery,
   encodeEmailId,
+  hasSearchFilters,
   OpenArchiverClient,
   OpenArchiverError,
   parseContentDispositionFilename,
@@ -302,5 +304,64 @@ describe("OpenArchiverClient response size limit", () => {
       assert.equal(err.message, "OpenArchiver request failed (500)");
       return true;
     });
+  });
+});
+
+describe("search filters", () => {
+  it("serialises every filter the way the API expects", () => {
+    const q = buildSearchQuery({
+      keywords: "  invoice ",
+      from: ["*@telekom.de", " billing@x.de "],
+      notFrom: ["noreply@*"],
+      to: ["me@example.com"],
+      notTo: ["list@example.com"],
+      mailboxes: ["me@example.com"],
+      dateFrom: "2025-01-01",
+      dateTo: "2025-12-31",
+      hasAttachments: false,
+      searchIn: ["subject", "attachment_content"],
+      sort: "date_asc",
+    });
+    assert.equal(q.get("keywords"), "invoice");
+    assert.equal(q.get("from"), "*@telekom.de,billing@x.de");
+    assert.equal(q.get("notFrom"), "noreply@*");
+    assert.equal(q.get("to"), "me@example.com");
+    assert.equal(q.get("notTo"), "list@example.com");
+    assert.equal(q.get("mailboxes"), "me@example.com");
+    assert.equal(q.get("dateFrom"), "2025-01-01");
+    assert.equal(q.get("dateTo"), "2025-12-31");
+    assert.equal(q.get("hasAttachments"), "false");
+    assert.equal(q.get("searchIn"), "subject,attachment_content");
+    assert.equal(q.get("sort"), "date_asc");
+  });
+
+  it("omits unset filters and empty keywords", () => {
+    const q = buildSearchQuery({ keywords: "  ", from: [], hasAttachments: undefined });
+    assert.equal(q.toString(), "");
+  });
+
+  it("knows which parameters count as filters", () => {
+    assert.equal(hasSearchFilters({}), false);
+    assert.equal(hasSearchFilters({ from: [] }), false);
+    assert.equal(hasSearchFilters({ from: ["a@b.c"] }), true);
+    assert.equal(hasSearchFilters({ dateTo: "2025-01-01" }), true);
+    assert.equal(hasSearchFilters({ hasAttachments: false }), true);
+  });
+
+  it("allows a filter-only search without keywords", async () => {
+    const recorded: Recorded[] = [];
+    const empty = { hits: [], total: 0, page: 1, limit: 10, totalPages: 0, processingTimeMs: 1 };
+    const client = new OpenArchiverClient("https://host/api/v1", "k", stubFetch(jsonResponse(empty), recorded));
+    await client.search({ from: ["*@example.com"] });
+    const url = new URL(recorded[0].url);
+    assert.equal(url.searchParams.has("keywords"), false);
+    assert.equal(url.searchParams.get("from"), "*@example.com");
+  });
+
+  it("rejects a search with neither keywords nor filters before sending it", async () => {
+    const recorded: Recorded[] = [];
+    const client = new OpenArchiverClient("https://host/api/v1", "k", stubFetch(jsonResponse({}), recorded));
+    await assert.rejects(client.search({ sort: "date_asc" }), /Provide keywords, or at least one filter/);
+    assert.equal(recorded.length, 0);
   });
 });

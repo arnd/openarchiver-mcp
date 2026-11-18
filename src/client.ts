@@ -2,11 +2,65 @@ export type FetchLike = typeof fetch;
 
 export type MatchingStrategy = "last" | "all" | "frequency";
 
-export interface SearchParams {
-  keywords: string;
+export type SearchScope = "subject" | "body" | "attachment_name" | "attachment_content" | "from" | "to";
+export type SearchSort = "relevance" | "date_desc" | "date_asc";
+
+/** Structured filters of OpenArchiver's advanced search (0.5.2+). List values are OR-combined
+ * within one filter and AND-combined across filters. Address values accept `*@domain` and
+ * `name@*` patterns. */
+export interface SearchFilters {
+  from?: string[];
+  notFrom?: string[];
+  /** Matches To, Cc or Bcc. */
+  to?: string[];
+  notTo?: string[];
+  /** Mailbox owner, i.e. the account an email was archived from. */
+  mailboxes?: string[];
+  /** Inclusive, UTC, yyyy-mm-dd. */
+  dateFrom?: string;
+  dateTo?: string;
+  hasAttachments?: boolean;
+}
+
+export interface SearchParams extends SearchFilters {
+  /** Optional when at least one filter is set (filter-only browsing). */
+  keywords?: string;
+  searchIn?: SearchScope[];
+  sort?: SearchSort;
   page?: number;
   limit?: number;
   matchingStrategy?: MatchingStrategy;
+}
+
+const LIST_FILTERS = ["from", "notFrom", "to", "notTo", "mailboxes"] as const;
+
+/** True when at least one structured filter is set (searchIn/sort only shape a keyword search). */
+export function hasSearchFilters(params: SearchFilters): boolean {
+  return (
+    LIST_FILTERS.some((key) => (params[key]?.length ?? 0) > 0) ||
+    Boolean(params.dateFrom) ||
+    Boolean(params.dateTo) ||
+    params.hasAttachments !== undefined
+  );
+}
+
+/** Build the `/search` query string. The API takes list filters comma-separated. */
+export function buildSearchQuery(params: SearchParams): URLSearchParams {
+  const query = new URLSearchParams();
+  if (params.keywords?.trim()) query.set("keywords", params.keywords.trim());
+  for (const key of LIST_FILTERS) {
+    const values = params[key]?.map((v) => v.trim()).filter(Boolean);
+    if (values?.length) query.set(key, values.join(","));
+  }
+  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params.dateTo) query.set("dateTo", params.dateTo);
+  if (params.hasAttachments !== undefined) query.set("hasAttachments", String(params.hasAttachments));
+  if (params.searchIn?.length) query.set("searchIn", params.searchIn.join(","));
+  if (params.sort) query.set("sort", params.sort);
+  if (params.page != null) query.set("page", String(params.page));
+  if (params.limit != null) query.set("limit", String(params.limit));
+  if (params.matchingStrategy) query.set("matchingStrategy", params.matchingStrategy);
+  return query;
 }
 
 export interface SearchAttachment {
@@ -201,12 +255,12 @@ export class OpenArchiverClient {
   }
 
   async search(params: SearchParams): Promise<SearchResponse> {
-    const query = new URLSearchParams();
-    query.set("keywords", params.keywords);
-    if (params.page != null) query.set("page", String(params.page));
-    if (params.limit != null) query.set("limit", String(params.limit));
-    if (params.matchingStrategy) query.set("matchingStrategy", params.matchingStrategy);
-    const res = await this.request(`/search?${query.toString()}`);
+    if (!params.keywords?.trim() && !hasSearchFilters(params)) {
+      throw new OpenArchiverError(
+        "Provide keywords, or at least one filter (from, to, notFrom, notTo, mailboxes, dateFrom, dateTo, hasAttachments).",
+      );
+    }
+    const res = await this.request(`/search?${buildSearchQuery(params).toString()}`);
     return (await this.json(res)) as SearchResponse;
   }
 

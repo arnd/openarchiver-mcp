@@ -1,6 +1,6 @@
 import { convert as htmlToText } from "html-to-text";
 
-import type { EmailDetail, IntegrityCheckResult, SearchResponse } from "./client.js";
+import type { EmailDetail, IntegrityCheckResult, SearchParams, SearchResponse } from "./client.js";
 
 /** Format an epoch-millis number or ISO string as an ISO timestamp; fall back to the raw value. */
 export function formatDate(value: string | number | undefined | null): string {
@@ -24,6 +24,29 @@ export function formatBytes(bytes: number | undefined): string {
 }
 
 /** Render search results as a compact, id-forward text block. */
+/** One-line summary of the structured filters a search ran with, or "" when none were set.
+ * Echoed above the results so the caller can see what the hit list is narrowed to. */
+export function describeSearchFilters(params: SearchParams): string {
+  const parts: string[] = [];
+  const list = (label: string, values?: string[]) => {
+    if (values?.length) parts.push(`${label} ${values.join(" | ")}`);
+  };
+  list("from", params.from);
+  list("not from", params.notFrom);
+  list("to", params.to);
+  list("not to", params.notTo);
+  list("mailbox", params.mailboxes);
+  if (params.dateFrom || params.dateTo) {
+    parts.push(`date ${params.dateFrom ?? "…"} – ${params.dateTo ?? "…"}`);
+  }
+  if (params.hasAttachments !== undefined) {
+    parts.push(params.hasAttachments ? "with attachments" : "without attachments");
+  }
+  if (params.searchIn?.length) parts.push(`keywords in ${params.searchIn.join(", ")}`);
+  if (params.sort) parts.push(`sorted ${params.sort}`);
+  return parts.join("; ");
+}
+
 export function formatSearchResults(data: SearchResponse): string {
   const hits = data.hits ?? [];
   const limit = data.limit || hits.length || 1;

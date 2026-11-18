@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { EmailDetail, IntegrityCheckResult, SearchResponse } from "./client.js";
 import {
+  describeSearchFilters,
   classifyAttachment,
   formatBytes,
   formatEmail,
@@ -215,5 +216,23 @@ describe("formatIntegrityResults", () => {
 
   it("handles an empty report", () => {
     assert.match(formatIntegrityResults("e1", []), /no items returned/);
+  });
+});
+
+describe("describeSearchFilters", () => {
+  it("returns an empty string when no filter is set", () => {
+    assert.equal(describeSearchFilters({ keywords: "x", page: 2 }), "");
+  });
+
+  it("summarises the filters in one line", () => {
+    assert.equal(
+      describeSearchFilters({
+        from: ["*@telekom.de", "a@b.c"],
+        dateFrom: "2025-01-01",
+        hasAttachments: true,
+        sort: "date_asc",
+      }),
+      "from *@telekom.de | a@b.c; date 2025-01-01 – …; with attachments; sorted date_asc",
+    );
   });
 });
