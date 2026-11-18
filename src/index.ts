@@ -205,8 +205,10 @@ async function main(): Promise<void> {
     {
       title: "Read a full archived email",
       description:
-        "Fetch a single archived email by id: metadata, full body text, and the list of attachments " +
-        "(each with a `storagePath` you can pass to `get_attachment`).",
+        "Fetch a single archived email by id: metadata, full body text, the list of attachments " +
+        "(each with a `storagePath` you can pass to `get_attachment`), and — if it belongs to a " +
+        "conversation — a compact thread overview (date, sender and id of each message, the open one " +
+        "marked; subjects only where they differ). Open another thread message by passing its id to get_email.",
       inputSchema: {
         id: z.string().min(1).describe("The archived email id, as returned by search_archive."),
       },

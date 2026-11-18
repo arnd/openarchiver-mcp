@@ -40,3 +40,20 @@ Content-Disposition: attachment; filename="note.txt"
 ATTACHMENT-NEEDLE-CONTENT: this text lives inside note.txt.
 
 --oa-integration-boundary--
+
+From bob@example.net Mon Jun 01 11:15:00 2026
+Date: Mon, 01 Jun 2026 11:15:00 +0000
+From: Bob Example <bob@example.net>
+To: Alice Example <alice@example.com>
+Subject: Re: MCPINTEGRATIONNEEDLE first archived message
+Message-ID: <needle-0003@example.net>
+In-Reply-To: <needle-0001@example.com>
+References: <needle-0001@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Hi Alice,
+
+this reply carries the token THREADREPLYNEEDLE so the integration test can
+open it and check that get_email lists the thread it belongs to.
+
+Bob
