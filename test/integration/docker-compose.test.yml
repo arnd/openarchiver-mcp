@@ -5,12 +5,12 @@
 # that the orchestrator drops with `down -v` so every run starts from zero users
 # (which lets ADMIN_EMAIL/ADMIN_PASSWORD auto-create the admin via GET /api/v1/auth/status).
 #
-# Image tags are pinned to the versions this MCP is developed against (OpenArchiver 0.5.2).
+# The OpenArchiver tag comes from scripts/integration.mjs (see .github/oa-snapshot.json).
 
 services:
     open-archiver:
-        # Tag is set by scripts/integration.mjs via the OA_IMAGE_TAG env var (default v0.5.2).
-        image: logiclabshq/open-archiver:${OA_IMAGE_TAG:-v0.5.2}
+        # Tag is set by scripts/integration.mjs via the OA_IMAGE_TAG env var.
+        image: logiclabshq/open-archiver:${OA_IMAGE_TAG:?OA_IMAGE_TAG is set by scripts/integration.mjs}
         restart: "no"
         ports:
             - '3000:3000'
@@ -19,11 +19,17 @@ services:
         volumes:
             - oa-data:/var/data/open-archiver
             - ./fixtures:/fixtures:ro
+        # The image runs its DB migration once at startup and exits if Postgres is not yet
+        # accepting connections, so wait for it to be healthy, not just started.
         depends_on:
-            - postgres
-            - valkey
-            - meilisearch
-            - tika
+            postgres:
+                condition: service_healthy
+            valkey:
+                condition: service_started
+            meilisearch:
+                condition: service_started
+            tika:
+                condition: service_started
 
     postgres:
         image: postgres:17-alpine
@@ -34,6 +40,11 @@ services:
             POSTGRES_PASSWORD: password
         volumes:
             - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U admin -d open_archive']
+            interval: 2s
+            timeout: 5s
+            retries: 30
 
     valkey:
         image: valkey/valkey:8-alpine
